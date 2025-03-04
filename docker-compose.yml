@@ -166,7 +166,6 @@ services:
       - logstashdata01:/usr/share/logstash/data
       - "${LOGSTASH_ROOT}/logstash_ingest_data/:/usr/share/logstash/data/"
       - "${LOGSTASH_ROOT}/pipeline/:/usr/share/logstash/pipeline/"
-      - "${LOGSTASH_ROOT}/watch-sincedb.sh:/usr/share/logstash/watch-sincedb.sh"
       - "${LOGSTASH_ROOT}/logstash.yml:/usr/share/logstash/config/logstash.yml" 
 
     environment:
@@ -176,6 +175,5 @@ services:
       - ELASTIC_HOSTS=https://es01:9200
       - LS_JAVA_OPTS=-Xms2g -Xmx2g
     restart: "no"  # Ensures Logstash does not restart after exiting
-    entrypoint: ["/bin/bash", "-c", "/usr/share/logstash/watch-sincedb.sh"]
     networks:
       - elastic
