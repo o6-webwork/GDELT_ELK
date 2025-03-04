@@ -10,6 +10,10 @@ volumes:
   logstashdata01:
     driver: local
 
+networks:
+  elastic:
+    driver: bridge
+
 services:
   setup:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
@@ -65,6 +69,8 @@ services:
       interval: 1s
       timeout: 5s
       retries: 120
+    networks:
+      - elastic
 
   es01:
     depends_on:
@@ -108,6 +114,8 @@ services:
       interval: 10s
       timeout: 10s
       retries: 120
+    networks:
+      - elastic
 
   kibana:
     depends_on:
@@ -141,6 +149,8 @@ services:
       interval: 10s
       timeout: 10s
       retries: 120
+    networks:
+      - elastic
 
   logstash01:
     depends_on:
@@ -158,6 +168,8 @@ services:
       - "${LOGSTASH_ROOT}/logstash_ingest_data/:/usr/share/logstash/data/"
       - "${LOGSTASH_ROOT}/pipeline/:/usr/share/logstash/pipeline/"
       - "${LOGSTASH_ROOT}/watch-sincedb.sh:/usr/share/logstash/watch-sincedb.sh"
+      - "${LOGSTASH_ROOT}/logstash.yml:/usr/share/logstash/config/logstash.yml" 
+
     environment:
       - xpack.monitoring.enabled=false
       - ELASTIC_USER=elastic
@@ -166,3 +178,5 @@ services:
       - LS_JAVA_OPTS=-Xms2g -Xmx2g
     restart: "no"  # Ensures Logstash does not restart after exiting
     entrypoint: ["/bin/bash", "-c", "/usr/share/logstash/watch-sincedb.sh"]
+    networks:
+      - elastic
