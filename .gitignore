@@ -1,0 +1,7 @@
+# Ignore Logstash ingestion-related files
+logstash_ingest_data/.lock
+logstash_ingest_data/sincedb.txt
+logstash_ingest_data/uuid
+
+# Ignore Env var
+.env

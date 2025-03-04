@@ -42,7 +42,7 @@ Use the following Docker command to run Logstash. Adjust the host paths and para
 ```bash
 docker run --rm -it --name log01 --network elastic \
   -v ~/pipeline/:/usr/share/logstash/pipeline/ \
-  -v /home/otb-02/code/logstash_ingest/:/usr/share/logstash/data/ \
+  -v /home/mushroom/OTB-ElasticSearch/pyspark_gdelt/transformed_gkg.json/:/usr/share/logstash/data/ \
   docker.elastic.co/logstash/logstash:8.17.2
 ```
 
