@@ -164,7 +164,7 @@ services:
     volumes:
       - certs:/usr/share/logstash/certs
       - logstashdata01:/usr/share/logstash/data
-      - "${LOGSTASH_ROOT}/logstash_ingest_data/:/usr/share/logstash/data/"
+      - "${LOGSTASH_ROOT}/logstash_ingest_data/json/:/usr/share/logstash/data/"
       - "${LOGSTASH_ROOT}/pipeline/:/usr/share/logstash/pipeline/"
       - "${LOGSTASH_ROOT}/logstash.yml:/usr/share/logstash/config/logstash.yml" 
 
