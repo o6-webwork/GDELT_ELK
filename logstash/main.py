@@ -16,7 +16,7 @@ from pyspark.sql.window import Window
 from pyspark.sql import functions as F
 import glob
 import shutil
-
+import time
 #Get download file link from web
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
 DOWNLOAD_FOLDER = "./csv"
@@ -157,7 +157,7 @@ def run_pipeline(raw_file, parquet_output, json_output):
             col("V2EnhancedThemes.V2Theme")  # Removed 'WordCount'
         )
     )
-
+    
     # Remove duplicates
     df_transformed = df_transformed.withColumn(
         "V2Locations",
@@ -171,7 +171,6 @@ def run_pipeline(raw_file, parquet_output, json_output):
             array_distinct(col("V2Locations.FeatureId")).alias("FeatureId")
         )
     )
-
     df_transformed = df_transformed.withColumn(
         "V2Persons",
         struct(
@@ -179,7 +178,6 @@ def run_pipeline(raw_file, parquet_output, json_output):
 
         )
     )
-
 
     # Reduce to a single partition so that we get one output file.
     df_transformed = df_transformed.coalesce(1)
@@ -245,3 +243,23 @@ if __name__ == "__main__":
         process_downloaded_files(out)
         sleep(15*60) # every 15 minutes
 
+        age_threshold = 24 * 60 * 60  # 86400 seconds - 24 hours
+
+        # Get the current time
+        current_time = time.time()
+
+        # Loop through files in the directory
+        directory = "./logstash_ingest_data/json"
+        for filename in os.listdir(directory):
+            file_path = os.path.join(directory, filename)
+
+            # Check if it's a file (not a directory)
+            if os.path.isfile(file_path):
+                if file_path.endswith(".json"):
+                    # Get the last modification time
+                    file_mod_time = os.path.getmtime(file_path)
+
+                    # Check if the file is older than 24 hours
+                    if (current_time - file_mod_time) > age_threshold:
+                        print(f"Deleting: {file_path}")
+                        os.remove(file_path)  # Delete the file

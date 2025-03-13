@@ -1,7 +1,10 @@
 # Ignore Logstash ingestion-related files
-logstash/logstash_ingest_data/.lock
-logstash/logstash_ingest_data/sincedb.txt
-logstash/logstash_ingest_data/uuid
+logstash/logstash_ingest_data/json/.lock
+logstash/logstash_ingest_data/json/sincedb.txt
+logstash/logstash_ingest_data/json/uuid
+logstash/csv
+logstash/logs
 
 # Ignore Env var
 .env
+

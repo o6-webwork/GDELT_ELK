@@ -130,6 +130,7 @@ services:
     ports:
       - ${KIBANA_PORT}:5601
     environment:
+      - NODE_OPTIONS=--max_old_space_size=4096
       - SERVERNAME=kibana
       - ELASTICSEARCH_HOSTS=https://es01:9200
       - ELASTICSEARCH_USERNAME=kibana_system
@@ -150,6 +151,7 @@ services:
       retries: 120
     networks:
       - elastic
+    restart: always
 
   logstash01:
     depends_on:
