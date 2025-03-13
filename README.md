@@ -12,8 +12,9 @@ Before you begin, ensure you have the following installed:
 - Python 3.x
 
 ## Setting it up
-1) In the `/logstash` folder, run `python(3) main.py`. The script outputs a json and parquet file in the same directory (`csv`). The json file is copied to `logstash/logstash_ingest_data/json` for ingestion.
-2) Use the following Docker command to run the entire ELK stack. Adjust the parameters in `docker-compose.yml` as needed.
+1) Configure elastic credentials in both  `.env` and `/logstash/pipeline/logstash.conf`. 
+2) In the `/logstash` folder, run `python(3) main.py`. The script outputs a json and parquet file in the same directory (`csv`). The json file is copied to `logstash/logstash_ingest_data/json` for ingestion.
+3) Use the following Docker command to run the entire ELK stack. Adjust the parameters in `docker-compose.yml` as needed.
 ```docker compose up``` 
 
 Docker mounts the logstash/logstash_ingest_data/json volume, allowing the logstash container to read it for ingestion.
