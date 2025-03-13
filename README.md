@@ -8,20 +8,18 @@ This repository automates the process of converting CSV data to JSON format, fla
 
 ## Prerequisites
 Before you begin, ensure you have the following installed:
-Docker (including Docker Compose)
-Python 3.x
+- Docker (including Docker Compose)
+- Python 3.x
 
-## Data Processing
-1) In the `/data_processing` folder, run `python(3) main.py`, adjusting the `raw_file_path` parameter as needed. The script outs a json and parquet file in the same directory.
-2) Copy the json folder into /logstash/logstash_ingest_data. This directory will be mounted to the logstash container later for ingestion
-
-## Running Services
-Use the following Docker command to run the entire ELK stack. Adjust the parameters in `docker-compose.yml` as needed.
-
+## Setting it up
+1) In the `/logstash` folder, run `python(3) main.py`. The script outputs a json and parquet file in the same directory (`csv`). The json file is copied to `logstash/logstash_ingest_data/json` for ingestion.
+2) Use the following Docker command to run the entire ELK stack. Adjust the parameters in `docker-compose.yml` as needed.
 ```docker compose up``` 
 
+Docker mounts the logstash/logstash_ingest_data/json volume, allowing the logstash container to read it for ingestion.
 
-### Empty Fields in Kibana:
+## Troubleshooting
+### Empty Fields in Kibana
 Delete the sincedb.txt in logstash/logstash_ingest_data 
 
 ### Authentication Error
