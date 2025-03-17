@@ -169,6 +169,7 @@ services:
       - "${LOGSTASH_ROOT}/logstash_ingest_data/json/:/usr/share/logstash/data/"
       - "${LOGSTASH_ROOT}/pipeline/:/usr/share/logstash/pipeline/"
       - "${LOGSTASH_ROOT}/logstash.yml:/usr/share/logstash/config/logstash.yml" 
+      - "${LOGSTASH_ROOT}/template.json:/usr/share/logstash/template.json"
 
     environment:
       - xpack.monitoring.enabled=false

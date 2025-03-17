@@ -175,21 +175,82 @@ def run_pipeline(raw_file, parquet_output, json_output):
         "V2Persons",
         struct(
             array_distinct(col("V2Persons.V1Person")).alias("V1Person"),
-
         )
     )
 
-    # Reduce to a single partition so that we get one output file.
-    df_transformed = df_transformed.coalesce(1)
+    # df_transformed = df_transformed.withColumn(
+    #     "V21Counts",
+    #     struct(
+    #         array_distinct(col("V21Counts.CountType")).alias("CountType"),
+    #         array_distinct(col("V21Counts.Count")).alias("Count"),
+    #         array_distinct(col("V21Counts.ObjectType")).alias("ObjectType"),
+    #         array_distinct(col("V21Counts.LocationType")).alias("LocationType"),
+    #         array_distinct(col("V21Counts.FullName")).alias("FullName"),
+    #         array_distinct(col("V21Counts.CountryCode")).alias("CountryCode"),
+    #         array_distinct(col("V21Counts.ADM1Code")).alias("ADM1Code"),
+    #         array_distinct(col("V21Counts.LocationLatitude")).alias("LocationLatitude"),
+    #         array_distinct(col("V21Counts.LocationLongitude")).alias("LocationLongitude"),
+    #         array_distinct(col("V21Counts.FeatureId")).alias("FeatureId"),
+    #         array_distinct(col("V21Counts.CharOffset")).alias("CharOffset"),
+    #     )
+    # )
+
+    df_transformed = df_transformed.withColumn(
+        "V2EnhancedThemes",
+        struct(
+            array_distinct(col("V2EnhancedThemes.V2Theme")).alias("V2Theme"),
+        )
+    )
+
+    df_transformed = df_transformed.withColumn(
+        "V2Orgs",
+        struct(
+            array_distinct(col("V2Orgs.V1Org")).alias("V1Org"),
+        )
+    )
+
+    df_transformed = df_transformed.withColumn(
+        "V2GCAM",
+        struct(
+            array_distinct(col("V2GCAM.DictionaryDimId")).alias("DictionaryDimId"),
+        )
+    )
+
+    df_transformed = df_transformed.withColumn(
+        "V21Quotations",
+        struct(
+            array_distinct(col("V21Quotations.Verb")).alias("Verb"),
+            array_distinct(col("V21Quotations.Quote")).alias("Quote"),
+        )
+    )
+
+
+    df_transformed = df_transformed.withColumn(
+        "V21AllNames",
+        struct(
+            array_distinct(col("V21AllNames.Name")).alias("Name"),
+        )
+    )
     
-    # Write as a single Parquet file.
-    df_transformed.write.mode("overwrite").parquet(parquet_output)
-    print(f"Pipeline completed. Single Parquet output written to {parquet_output}")
+    # change column names
+    column_names = ["V21ShareImg", "V21SocImage", "V2DocId", "V21RelImg", "V21Date"]
+    for col_name in column_names:
+        df_transformed = df_transformed.withColumn(col_name, col(f"{col_name}.{col_name}"))
+
+    # Reduce to a single partition so that we get one output file.
+    df_transformed.coalesce(1).write.mode("overwrite").json(json_output)
+    print(f"Pipeline completed. Single JSON output written to {json_output}")
+
+    json_part_file = glob.glob(os.path.join(json_output, "part-00000-*.json"))[0]
+    date_part = str((raw_file.split('/')[2].split('.'))[0])
+    new_file_name = f"{date_part}.json"
+    shutil.move(json_part_file, os.path.join(json_output, new_file_name))
+    cp_json_to_ingest(os.path.join(json_output, new_file_name))
+    # # Write as a single Parquet file.
+    # df_transformed.write.mode("overwrite").parquet(parquet_output)
+    # print(f"Pipeline completed. Single Parquet output written to {parquet_output}")
     
     # Write as a single JSON file.
-    df_transformed.write.mode("overwrite").json(json_output)
-    print(f"Pipeline completed. Single JSON output written to {json_output}")
-    cp_json_to_ingest(json_output)
 
     spark.stop()
 
@@ -214,18 +275,15 @@ def cp_json_to_ingest(file_path):
     os.makedirs(logstash_path, exist_ok=True)
     
     # Only copy the .json file
-    if os.path.isdir(file_path):
-        json_files = glob.glob(os.path.join(file_path, "*.json"))
-        for file in json_files:
-            target_path = os.path.join(logstash_path, os.path.basename(file))
-            shutil.copy(file, target_path)
-            print(f"Copied {file} to {target_path}")
-    # elif file_path.endswith(".json"):
-    #     # If it's a direct file path
-    #     target_path = os.path.join(logstash_path, os.path.basename(file_path))
-    #     shutil.copy(file_path, target_path)
-    #     print(f"Copied {file_path} to {target_path}")
+    if os.path.isfile(file_path) and file_path.endswith(".json"):
+        # Get the filename from the full path and copy to the target directory
+        target_path = os.path.join(logstash_path, os.path.basename(file_path))
+        shutil.copy(file_path, target_path)
+        print(f"Copied {file_path} to {target_path}")
+    else:
+        print(f"Invalid file: {file_path} (Not a .json file or file doesn't exist)")
 
+        
 if __name__ == "__main__":
     out = []
 

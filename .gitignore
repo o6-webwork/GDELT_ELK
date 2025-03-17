@@ -1,7 +1,5 @@
 # Ignore Logstash ingestion-related files
-logstash/logstash_ingest_data/json/.lock
-logstash/logstash_ingest_data/json/sincedb.txt
-logstash/logstash_ingest_data/json/uuid
+logstash/logstash_ingest_data/json/*
 logstash/csv
 logstash/logs
 
