@@ -1,0 +1,6 @@
+Found 3 files to download...
+
+Extracting: 20250320083000.gkg.csv
+Completed: 20250320083000.gkg.csv.zip
+All files downloaded and extracted in the 'downloads' folder.
+Processing file: ./csv/20250320083000.gkg.csv

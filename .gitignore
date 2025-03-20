@@ -5,4 +5,4 @@ logstash/logs
 
 # Ignore Env var
 .env
-
+*/__pycache__

@@ -1,0 +1,9 @@
+# Ignore Python cache files
+__pycache__
+*.pyc
+
+img/
+
+# Ignore git directory and files
+.git
+.gitignore
