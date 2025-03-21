@@ -71,18 +71,6 @@ services:
       retries: 120
     networks:
       - elastic
-
-  scraper:
-    build: ./logstash
-    volumes:
-      - certs:/usr/share/logstash/certs
-      - logstashdata01:/usr/share/logstash/data
-      - "${LOGSTASH_ROOT}/logstash_ingest_data/json/:/usr/share/logstash/data/"
-      - "${LOGSTASH_ROOT}/pipeline/:/usr/share/logstash/pipeline/"
-      - "${LOGSTASH_ROOT}/logstash.yml:/usr/share/logstash/config/logstash.yml"
-      - "${LOGSTASH_ROOT}/template.json:/usr/share/logstash/template.json"
-      - ./logstash/logstash_ingest_data:/app/logstash/logstash_ingest_data
-
   es01:
     depends_on:
       setup:
@@ -164,6 +152,11 @@ services:
       - elastic
     restart: always
 
+  scraper:
+    build: ./logstash
+    volumes:
+      - ${LOGSTASH_ROOT}/logstash_ingest_data/json/:/app/logstash_ingest_data/json
+
   logstash01:
     depends_on:
       es01:
@@ -176,7 +169,6 @@ services:
     user: root
     volumes:
       - certs:/usr/share/logstash/certs
-      - logstashdata01:/usr/share/logstash/data
       - "${LOGSTASH_ROOT}/logstash_ingest_data/json/:/usr/share/logstash/data/"
       - "${LOGSTASH_ROOT}/pipeline/:/usr/share/logstash/pipeline/"
       - "${LOGSTASH_ROOT}/logstash.yml:/usr/share/logstash/config/logstash.yml" 

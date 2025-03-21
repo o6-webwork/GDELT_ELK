@@ -1,4 +1,3 @@
-# Use an official Python runtime as a base image.
 FROM python:3.10
 
 # Install OpenJDK 17 (required for PySpark)
@@ -19,8 +18,7 @@ COPY requirements.txt .
 # Install the Python packages from requirements.txt
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Optionally copy your application code (adjust if your main file is named differently)
 COPY . .
 
-# Command to run your app. Here we assume you have a main.py file.
+# Runs the Python app
 CMD ["python", "main.py"]
