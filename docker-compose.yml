@@ -7,7 +7,7 @@ volumes:
     driver: local
   kibanadata:
     driver: local
-  logstashdata01:
+  logstash01:
     driver: local
 
 networks:
@@ -155,7 +155,7 @@ services:
   scraper:
     build: ./logstash
     volumes:
-      - ${LOGSTASH_ROOT}/logstash_ingest_data/json/:/app/logstash_ingest_data/json
+      - logstash01:/app/logstash_ingest_data/json
 
   logstash01:
     depends_on:
@@ -169,7 +169,7 @@ services:
     user: root
     volumes:
       - certs:/usr/share/logstash/certs
-      - "${LOGSTASH_ROOT}/logstash_ingest_data/json/:/usr/share/logstash/data/"
+      - "logstash01:/usr/share/logstash/data/"
       - "${LOGSTASH_ROOT}/pipeline/:/usr/share/logstash/pipeline/"
       - "${LOGSTASH_ROOT}/logstash.yml:/usr/share/logstash/config/logstash.yml" 
       - "${LOGSTASH_ROOT}/template.json:/usr/share/logstash/template.json"
@@ -183,3 +183,13 @@ services:
     restart: "no"  # Ensures Logstash does not restart after exiting
     networks:
       - elastic
+
+  pipeline-monitoring:
+    depends_on:
+      es01:
+        condition: service_healthy
+      kibana:
+        condition: service_healthy
+    build: ./pipeline-monitoring
+    volumes:
+      - logstash01:/app/logs
