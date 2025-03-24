@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Dashboard</title>
+    <!-- Include Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <!-- jQuery for AJAX calls -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <style>
+      .panel {
+        border: 1px solid #ddd;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 5px;
+      }
+      .error {
+        color: red;
+      }
+      pre {
+        background: #f8f8f8;
+        padding: 10px;
+        height: 200px;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container my-4">
+      <h1 class="mb-4">Dashboard</h1>
+      
+      <!-- Status Panels -->
+      <div class="row">
+        <div class="col-md-6">
+          <div class="panel">
+            <h3>Scraping Pipeline</h3>
+            <ul class="list-unstyled">
+              {% for file in scraping_files %}
+                <li>
+                  <strong>{{ file.filename }}</strong> - {{ file.timestamp }}
+                  {% if file.error %}
+                    <span class="error">(Error)</span>
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="panel">
+            <h3>Ingestion Pipeline</h3>
+            <ul class="list-unstyled">
+              {% for file in ingestion_files %}
+                <li>
+                  <strong>{{ file.filename }}</strong> - {{ file.timestamp }}
+                  {% if file.error %}
+                    <span class="error">(Error)</span>
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Interactive Forms -->
+      <div class="row">
+        <!-- Patching Form -->
+        <div class="col-md-6">
+          <div class="panel">
+            <h3>Patching Missing Files</h3>
+            <form id="patchForm">
+              <div class="form-group">
+                <label for="look_back_period">Look Back Period (days):</label>
+                <input type="number" class="form-control" id="look_back_period" name="look_back_period" value="7">
+              </div>
+              <button type="submit" class="btn btn-primary">Patch Missing Files</button>
+            </form>
+            <div id="patchStatus" class="mt-2"></div>
+          </div>
+        </div>
+        <!-- Ingestion Form -->
+        <div class="col-md-6">
+          <div class="panel">
+            <h3>Search for files</h3>
+            <form id="ingestForm">
+              <div class="form-group">
+                <label for="start_date">Start Date:</label>
+                <input type="date" class="form-control" id="start_date" name="start_date">
+              </div>
+              <div class="form-group">
+                <label for="end_date">End Date:</label>
+                <input type="date" class="form-control" id="end_date" name="end_date">
+              </div>
+              <button type="submit" class="btn btn-primary">Trigger Ingestion</button>
+            </form>
+            <div id="ingestStatus" class="mt-2"></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Expandable Log Panel -->
+      <div class="row">
+        <div class="col-md-12">
+          <div class="panel">
+            <h3>
+              Logs 
+              <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#logPanel" aria-expanded="false" aria-controls="logPanel">
+                Toggle Logs
+              </button>
+            </h3>
+            <div class="collapse" id="logPanel">
+              <pre id="logsArea">{% for log in logs %}{{ log }}
+{% endfor %}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- JavaScript for AJAX calls and log updates -->
+    <script>
+      // Update logs every 2 seconds
+      function updateLogs() {
+        $.getJSON("/logs", function(data) {
+          $("#logsArea").text(data.join("\n"));
+        });
+      }
+      setInterval(updateLogs, 2000);
+      
+      // Handle patching form submission
+      $("#patchForm").submit(function(e) {
+        e.preventDefault();
+        $.post("/patch_missing", $(this).serialize(), function(response) {
+          $("#patchStatus").text(response.message);
+        });
+      });
+      
+      // Handle ingestion form submission
+      $("#ingestForm").submit(function(e) {
+        e.preventDefault();
+        $.post("/ingest_archival", $(this).serialize(), function(response) {
+          $("#ingestStatus").text(response.message);
+        });
+      });
+    </script>
+    
+    <!-- Bootstrap JS (for collapse functionality) -->
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
