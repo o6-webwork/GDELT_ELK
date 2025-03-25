@@ -195,4 +195,4 @@ services:
     volumes:
       - logdata:/app/logs
     ports:
-      - 5000:5000
+      - ${PIPELINE_MONITORING_PORT}:7979

@@ -3,32 +3,91 @@
   <head>
     <meta charset="utf-8">
     <title>Dashboard</title>
-    <!-- Include Bootstrap CSS -->
+    <!-- Bootstrap CSS for styling -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <!-- jQuery for AJAX calls -->
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <style>
-      .panel {
-        border: 1px solid #ddd;
-        padding: 15px;
-        margin-bottom: 20px;
-        border-radius: 5px;
-      }
-      .error {
-        color: red;
-      }
-      pre {
-        background: #f8f8f8;
-        padding: 10px;
-        height: 200px;
-        overflow: auto;
+      /* Style for the circular status indicator */
+      .status-indicator {
+        height: 20px;
+        width: 20px;
+        display: inline-block;
+        border-radius: 50%;
       }
     </style>
   </head>
   <body>
-    <h1>DATA</h1>
-    {{ data }}
-    <!-- Bootstrap JS (for collapse functionality) -->
+    <div class="container mt-4">
+      <h1>Dashboard</h1>
+      <div class="row">
+        <!-- Scraping Pipeline Panel -->
+        <div class="col-md-6 mb-3">
+          <div class="card">
+            <div class="card-header">
+              Scraping Pipeline
+              <span id="scrapingIndicator" class="status-indicator bg-secondary ml-2"></span>
+            </div>
+            <div class="card-body">
+              <p>Status is determined by parsing the log file entries.</p>
+            </div>
+          </div>
+        </div>
+        <!-- Ingestion Pipeline Panel -->
+        <div class="col-md-6 mb-3">
+          <div class="card">
+            <div class="card-header">
+              Ingestion Pipeline
+              <span id="ingestionIndicator" class="status-indicator bg-secondary ml-2"></span>
+            </div>
+            <div class="card-body">
+              <p>Status is determined by parsing the log file entries.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Optionally display the complete log file -->
+      <div class="row">
+        <div class="col-md-12">
+          <div class="card">
+            <div class="card-header">Logs</div>
+            <div class="card-body">
+              <pre id="logDisplay">{{ data }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <script>
+      // Function to poll the /status endpoint and update the indicators
+      function updateStatus() {
+        $.getJSON('/status', function(data) {
+          // Update scraping indicator
+          if (data.scraping === 'running') {
+            $('#scrapingIndicator').removeClass().addClass('status-indicator bg-success ml-2');
+          } else if (data.scraping === 'error') {
+            $('#scrapingIndicator').removeClass().addClass('status-indicator bg-danger ml-2');
+          } else {
+            $('#scrapingIndicator').removeClass().addClass('status-indicator bg-secondary ml-2');
+          }
+          
+          // Update ingestion indicator
+          if (data.ingestion === 'running') {
+            $('#ingestionIndicator').removeClass().addClass('status-indicator bg-success ml-2');
+          } else if (data.ingestion === 'error') {
+            $('#ingestionIndicator').removeClass().addClass('status-indicator bg-danger ml-2');
+          } else {
+            $('#ingestionIndicator').removeClass().addClass('status-indicator bg-secondary ml-2');
+          }
+        });
+      }
+      
+      // Poll the status every second for real-time updates
+      setInterval(updateStatus, 1000);
+    </script>
+    
+    <!-- Optional Bootstrap JS -->
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
   </body>
 </html>
