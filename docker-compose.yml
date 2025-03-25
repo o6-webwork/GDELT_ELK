@@ -9,6 +9,8 @@ volumes:
     driver: local
   logstash01:
     driver: local
+  logdata:
+    driver: local
 
 networks:
   elastic:
@@ -156,6 +158,7 @@ services:
     build: ./logstash
     volumes:
       - logstash01:/app/logstash_ingest_data/json
+      - logdata:/app/logs
 
   logstash01:
     depends_on:
@@ -188,8 +191,8 @@ services:
     depends_on:
       es01:
         condition: service_healthy
-      kibana:
-        condition: service_healthy
     build: ./pipeline-monitoring
     volumes:
-      - logstash01:/app/logs
+      - logdata:/app/logs
+    ports:
+      - 5000:5000

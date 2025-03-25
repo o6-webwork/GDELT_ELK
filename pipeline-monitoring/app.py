@@ -3,27 +3,15 @@ from datetime import datetime
 import threading, time, os
 
 app = Flask(__name__)
-logs = []
 current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 @app.route('/')
 def dashboard():
-    log_dir = ".\\app\\logs\\sincedb.txt"
+    log_dir = ".\\app\\logs\\log.txt"
 
     with open(log_dir, "r") as f:
-        data = f.read().split("\n")
-
-    data = [i.split(" ") for i in data]
-    scraping_files = [
-        {"filename": "scraped_file_1.csv", "timestamp": "2025-03-23 10:00:00", "error": False}
-    ]
-    ingestion_files = [
-        {"filename": "ingested_file_1.csv", "timestamp": "2025-03-23 11:00:00", "error": False}
-    ]
-    return render_template("dashboard.html",
-                           scraping_files=scraping_files,
-                           ingestion_files=ingestion_files,
-                           logs=logs)
+        data = f.read()
+    return render_template("dashboard.html", data=data)
     
 if __name__ == '__main__':
     app.run(debug=True)
