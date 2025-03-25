@@ -1,8 +1,6 @@
-import os, datetime
-import logging
-from flask import Flask, render_template, jsonify
-import requests
-
+import os, datetime, requests, logging
+from flask import Flask, render_template, jsonify, request
+import threading 
 app = Flask(__name__)
 
 log_file = os.environ.get("LOG_FILE_PATH", "./logs/log.txt")
@@ -43,7 +41,7 @@ def get_pipeline_status(pipeline):
                     status = "idle"
     return status
 
-@app.route('/status')
+@app.route('/status',methods=['GET'])
 def status():
     # Read the log file and determine each pipeline's status
     scraping_status = get_pipeline_status("scraping")
@@ -53,11 +51,10 @@ def status():
         "ingestion": ingestion_status
     })
 
-@app.route('/patching')
-def patching_task(look_back_days, base_url="http://data.gdeltproject.org/gdeltv2/"):
+def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdeltv2/"):
     
     now = datetime.datetime.now()
-    start = now - datetime.timedelta(days=look_back_days)
+    start = now - datetime.timedelta(days=int(look_back_days))
     
     start = start.replace(second=0, microsecond=0)
     start_adjust = start.minute % 15
@@ -89,10 +86,11 @@ def patching_task(look_back_days, base_url="http://data.gdeltproject.org/gdeltv2
         
         current += datetime.timedelta(minutes=15)
 
+@app.route('/patching')
 def patch_missing():
-    look_back_period = request.form.get("look_back_period")
-    threading.Thread(target=patching_task, args=look_back_period).start()
-    return jsonify({"message": "Patching started", "look_back_period": look_back_period})
+    look_back_days = request.form.get("look_back_days")
+    threading.Thread(target=patching_task, args=(look_back_days,)).start()
+    return jsonify({"message": "Patching started", "look_back_period": look_back_days})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=7979, debug=True)
