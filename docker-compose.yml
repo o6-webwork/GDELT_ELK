@@ -11,6 +11,8 @@ volumes:
     driver: local
   logdata:
     driver: local
+  csvfiles:
+    driver: local
 
 networks:
   elastic:
@@ -159,6 +161,7 @@ services:
     volumes:
       - logstash01:/app/logstash_ingest_data/json
       - logdata:/app/logs
+      - csvfiles:/app/csv
 
   logstash01:
     depends_on:
@@ -194,5 +197,6 @@ services:
     build: ./pipeline-monitoring
     volumes:
       - logdata:/app/logs
+      - csvfiles:/app/csv
     ports:
       - ${PIPELINE_MONITORING_PORT}:7979
