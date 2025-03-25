@@ -81,7 +81,11 @@
           <div class="card">
             <div class="card-header">Process Logs</div>
             <div class="card-body">
-              <div id="logPanel" class="log-panel">{{data}}</div>
+              <div id="logPanel" class="log-panel">
+                {% for i in data %}
+                {{ i }}
+                {% endfor %}
+              </div>
             </div>
           </div>
         </div>
@@ -126,7 +130,7 @@
       $('#patchForm').submit(function(e) {
         e.preventDefault();
         var formData = $(this).serialize();
-        $.post('/patch_missing', formData, function(response) {
+        $.get('/patching', formData, function(response) {
           $('#patchStatus').text(response.message);
         });
       });
