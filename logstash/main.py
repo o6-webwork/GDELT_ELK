@@ -288,36 +288,40 @@ if __name__ == "__main__":
     out = []
 
     while True:
-        csv_zip_urls = get_latest_gdelt_links()
+        try:
+            csv_zip_urls = get_latest_gdelt_links()
 
-        if not csv_zip_urls:
-            write("No CSV ZIP links found in lastupdate.txt")
-        else:
-            write(f"Found {len(csv_zip_urls)} files to download...\n")
-            for url in csv_zip_urls:
-                out = download_and_extract(url, out)
+            if not csv_zip_urls:
+                write("No CSV ZIP links found in lastupdate.txt")
+            else:
+                write(f"Found {len(csv_zip_urls)} files to download...\n")
+                for url in csv_zip_urls:
+                    out = download_and_extract(url, out)
 
-        write("All files downloaded and extracted in the 'downloads' folder.")
-        process_downloaded_files(out)
-        sleep(15*60) # every 15 minutes
+            write("All files downloaded and extracted in the 'downloads' folder.")
+            process_downloaded_files(out)
+            sleep(15*60) # every 15 minutes
 
-        age_threshold = 24 * 60 * 60  # 86400 seconds - 24 hours
+            age_threshold = 24 * 60 * 60  # 86400 seconds - 24 hours
 
-        # Get the current time
-        current_time = time.time()
+            # Get the current time
+            current_time = time.time()
 
-        # Loop through files in the directory
-        directory = "./logstash_ingest_data/json"
-        for filename in os.listdir(directory):
-            file_path = os.path.join(directory, filename)
+            # Loop through files in the directory
+            directory = "./logstash_ingest_data/json"
+            for filename in os.listdir(directory):
+                file_path = os.path.join(directory, filename)
 
-            # Check if it's a file (not a directory)
-            if os.path.isfile(file_path):
-                if file_path.endswith(".json"):
-                    # Get the last modification time
-                    file_mod_time = os.path.getmtime(file_path)
+                # Check if it's a file (not a directory)
+                if os.path.isfile(file_path):
+                    if file_path.endswith(".json"):
+                        # Get the last modification time
+                        file_mod_time = os.path.getmtime(file_path)
 
-                    # Check if the file is older than 24 hours
-                    if (current_time - file_mod_time) > age_threshold:
-                        print(f"Deleting: {file_path}")
-                        os.remove(file_path)  # Delete the file
+                        # Check if the file is older than 24 hours
+                        if (current_time - file_mod_time) > age_threshold:
+                            print(f"Deleting: {file_path}")
+                            os.remove(file_path)  # Delete the file
+
+        except:
+            write(f"Error: {url} cannot be successfully downloaded!")
