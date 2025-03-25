@@ -15,6 +15,16 @@
         display: inline-block;
         border-radius: 50%;
       }
+      /* Log panel styling */
+      .log-panel {
+        background: #f8f8f8;
+        border: 1px solid #ddd;
+        padding: 10px;
+        height: 300px;
+        overflow-y: scroll;
+        white-space: pre-wrap;
+        font-family: monospace;
+      }
     </style>
   </head>
   <body>
@@ -46,13 +56,34 @@
           </div>
         </div>
       </div>
-      <!-- Optionally display the complete log file -->
+    <div class="container mt-4">
+      <h1>Patching Dashboard</h1>
+      <!-- Patching Form -->
       <div class="row">
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header">Patching Files</div>
+            <div class="card-body">
+              <form id="patchForm">
+                <div class="form-group">
+                  <label for="lookBackDays">Look Back Period (days):</label>
+                  <input type="number" id="lookBackDays" name="look_back_days" class="form-control" value="5" min="1">
+                </div>
+                <button type="submit" class="btn btn-primary">Start Patching</button>
+              </form>
+              <div id="patchStatus" class="mt-2"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+        
+        <!-- Log Panel -->
+      <div class="row mt-4">
         <div class="col-md-12">
           <div class="card">
-            <div class="card-header">Logs</div>
+            <div class="card-header">Process Logs</div>
             <div class="card-body">
-              <pre id="logDisplay">{{ data }}</pre>
+              <div id="logPanel" class="log-panel">{{data}}</div>
             </div>
           </div>
         </div>
@@ -85,6 +116,22 @@
       
       // Poll the status every second for real-time updates
       setInterval(updateStatus, 1000);
+
+      function updateLogs() {
+      $.get('/logs', function(data) {
+        $('#logPanel').text(data);
+      });
+    }
+    setInterval(updateLogs, 2000);
+    
+    // Handle patch form submission to trigger the patching function
+    $('#patchForm').submit(function(e) {
+      e.preventDefault();
+      var formData = $(this).serialize();
+      $.post('/patch_missing', formData, function(response) {
+        $('#patchStatus').text(response.message);
+      });
+    });
     </script>
     
     <!-- Optional Bootstrap JS -->
