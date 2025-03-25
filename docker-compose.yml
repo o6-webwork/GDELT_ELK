@@ -196,3 +196,5 @@ services:
       - logdata:/app/logs
     ports:
       - 5000:5000
+    networks:
+      - elastic
