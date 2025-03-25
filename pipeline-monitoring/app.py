@@ -8,12 +8,8 @@ log_file = os.environ.get("LOG_FILE_PATH", "./logs/log.txt")
 
 @app.route('/')
 def dashboard():
-    # Ensure the log file exists before reading it
-    if not os.path.exists(log_file):
-        with open(log_file, 'w') as f:
-            f.write('')
     with open(log_file, "r") as f:
-        data = f.read()
+        data = f.read().split("\n")
     return render_template("dashboard.html", data=data)
 
 def get_pipeline_status(pipeline):
