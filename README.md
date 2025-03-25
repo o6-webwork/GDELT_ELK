@@ -27,3 +27,6 @@ Delete the sincedb.txt in logstash/logstash_ingest_data
 
 ### Authentication Error
 Change credentials in BOTH `.env` and `/pipeline/logstash.conf`. These credentials must be identical to authenticate to Elastic.
+
+## Pipeline diagram:
+![alt text](GDELT_250325.drawio.png)
