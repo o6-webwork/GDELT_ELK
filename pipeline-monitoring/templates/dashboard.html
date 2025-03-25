@@ -57,8 +57,6 @@
         </div>
       </div>
     <div class="container mt-4">
-      <h1>Patching Dashboard</h1>
-      <!-- Patching Form -->
       <div class="row">
         <div class="col-md-6">
           <div class="card">
@@ -121,17 +119,17 @@
       $.get('/logs', function(data) {
         $('#logPanel').text(data);
       });
-    }
-    setInterval(updateLogs, 2000);
+      }
+      setInterval(updateLogs, 2000);
     
-    // Handle patch form submission to trigger the patching function
-    $('#patchForm').submit(function(e) {
-      e.preventDefault();
-      var formData = $(this).serialize();
-      $.post('/patch_missing', formData, function(response) {
-        $('#patchStatus').text(response.message);
+      // Handle patch form submission to trigger the patching function
+      $('#patchForm').submit(function(e) {
+        e.preventDefault();
+        var formData = $(this).serialize();
+        $.post('/patch_missing', formData, function(response) {
+          $('#patchStatus').text(response.message);
+        });
       });
-    });
     </script>
     
     <!-- Optional Bootstrap JS -->
