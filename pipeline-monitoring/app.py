@@ -81,6 +81,49 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
     # Note: Returning a JSON response here isn’t used when running in a background thread.
     return jsonify({"message": f"Patching files from {look_back_days} days ago completed."})
 
+def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdeltproject.org/gdeltv2/"):
+    """
+    Downloads CSV files from the GDELT archive within a custom date range.
+    Expects start_date_str and end_date_str in the format "YYYY-MM-DD".
+    Files are expected at 15-minute intervals.
+    """
+    try:
+        start = datetime.datetime.strptime(start_date_str, "%Y-%m-%d")
+        end = datetime.datetime.strptime(end_date_str, "%Y-%m-%d")
+    except Exception as e:
+        write(f"Error parsing dates: {e}")
+        return jsonify({"message": "Invalid date format."})
+    
+    # Ensure start time is aligned: reset seconds/microseconds and round minutes down to nearest 15
+    start = start.replace(second=0, microsecond=0)
+    start_adjust = start.minute % 15
+    if start_adjust != 0:
+        start = start - datetime.timedelta(minutes=start_adjust)
+    
+    current = start
+    while current <= end:
+        # Create a timestamp string: YYYYMMDDHHMMSS (seconds always "00")
+        timestamp = current.strftime("%Y%m%d%H%M%S")
+        file_url = f"{base_url}{timestamp}.gkg.csv.zip"
+        local_filename = f"{timestamp}.gkg.csv"
+        write(f"Extracting {local_filename}...")
+        
+        try:
+            response = requests.get(file_url, stream=True, timeout=10)
+            if response.status_code == 200:
+                zip_file = zipfile.ZipFile(BytesIO(response.content))
+                zip_file.extract(local_filename, download_folder)
+                write(f"Extracted {local_filename}.")
+            else:
+                write(f"File not found or error {response.status_code} for URL: {file_url}")
+        except Exception as e:
+            write(f"Error extracting {local_filename}: {e}")
+        
+        current += datetime.timedelta(minutes=15)
+    
+    write(f"Patching files from {start_date_str} to {end_date_str} completed.")
+    return jsonify({"message": f"Patching files from {start_date_str} to {end_date_str} completed."})
+
 ############################ Flask Routes ############################
 
 @app.route('/')
@@ -132,56 +175,74 @@ def patch_missing():
 @app.route('/get_archive_files', methods=['POST'])
 def get_archive_files():
     """
-    Returns a list of available GDELT archive files based on a custom date range.
+    Uses the patching_task_range function to download files within a custom date range,
+    then returns a list of available archive files (downloaded to the download folder) 
+    along with the patching status message.
     Expects 'start_date' and 'end_date' (format: YYYY-MM-DD) from the form.
     """
     start_date = request.form.get('start_date')
     end_date = request.form.get('end_date')
     try:
-        start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
-        end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+        # Validate date format
+        datetime.datetime.strptime(start_date, "%Y-%m-%d")
+        datetime.datetime.strptime(end_date, "%Y-%m-%d")
     except Exception as e:
         return jsonify({"files": [], "error": "Invalid date format."})
     
+    # Call patching_task_range synchronously to download files for the given range.
+    patch_response = patching_task_range(start_date, end_date)
+    patch_status = patch_response.get_json().get("message", "")
+    
     try:
-        all_files = os.listdir(archive_dir)
+        all_files = os.listdir(download_folder)
     except Exception as e:
         return jsonify({"files": [], "error": str(e)})
     
     available_files = []
-    # Assuming files are named in the format "YYYYMMDDHHMMSS.gkg.csv.zip"
+    start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+    end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+    # Look for files named like "YYYYMMDDHHMMSS.gkg.csv"
     for f in all_files:
         try:
-            # Extract date from filename (first 8 characters as YYYYMMDD)
             file_date = datetime.datetime.strptime(f[:8], "%Y%m%d")
             if start_dt <= file_date <= end_dt:
                 available_files.append(f)
         except Exception:
             continue
     
-    return jsonify({"files": available_files})
+    return jsonify({"files": available_files, "patch_status": patch_status})
 
 @app.route('/ingest_archive_files', methods=['POST'])
 def ingest_archive_files():
     """
-    Simulates the ingestion of selected archive files.
-    Expects a JSON payload with a key "files" containing a list of filenames.
+    Simulates the ingestion process for selected archive files.
+    Optionally, if a date range is provided, first trigger patching_task_range 
+    to download files for that range before ingestion.
+    Expects a JSON payload with:
+      - "files": a list of selected filenames,
+      - Optionally, "start_date" and "end_date" (format: YYYY-MM-DD).
     Returns a summary report as JSON.
     """
     data = request.get_json()
     selected_files = data.get("files", [])
+    start_date = data.get("start_date")
+    end_date = data.get("end_date")
     
-    # Simulated ingestion: simply count the files and report success.
+    patch_status = ""
+    if start_date and end_date:
+        patch_response = patching_task_range(start_date, end_date)
+        patch_status = patch_response.get_json().get("message", "")
+    
+    # Simulate ingestion: simply count the selected files.
     files_ingested = len(selected_files)
-    errors = 0  # In a real implementation, this would reflect actual error counts.
+    errors = 0  # Replace with real error handling if needed.
     status_msg = "success" if errors == 0 else "failure"
-    
-    # You would add your ingestion logic here.
     
     return jsonify({
         "files_ingested": files_ingested,
         "errors": errors,
-        "status": status_msg
+        "status": status_msg,
+        "patch_status": patch_status
     })
 
 ############################ Main ############################
