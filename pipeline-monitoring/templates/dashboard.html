@@ -76,6 +76,7 @@
       </div>
         
         <!-- Log Panel -->
+        <a href="http://127.0.0.1:7979/">Refresh</a>
       <div class="row mt-4">
         <div class="col-md-12">
           <div class="card">
@@ -130,7 +131,7 @@
       $('#patchForm').submit(function(e) {
         e.preventDefault();
         var formData = $(this).serialize();
-        $.get('/patching', formData, function(response) {
+        $.post('/patching', formData, function(response) {
           $('#patchStatus').text(response.message);
         });
       });
