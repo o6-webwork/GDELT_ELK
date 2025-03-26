@@ -76,17 +76,14 @@
       </div>
         
         <!-- Log Panel -->
-        <a href="http://127.0.0.1:7979/">Refresh</a>
+        
       <div class="row mt-4">
         <div class="col-md-12">
           <div class="card">
             <div class="card-header">Process Logs</div>
             <div class="card-body">
-              <div id="logPanel" class="log-panel">
-                {% for i in data %}
-                {{ i }}
-                {% endfor %}
-              </div>
+              <a href="http://127.0.0.1:7979/">Refresh</a>
+              <pre id="logPanel" class="log-panel"></pre>
             </div>
           </div>
         </div>
@@ -121,10 +118,11 @@
       setInterval(updateStatus, 1000);
 
       function updateLogs() {
-      $.get('/logs', function(data) {
-        $('#logPanel').text(data);
-      });
+        $.get('/logs', function(data) {
+          $('#logPanel').text(data);
+        });
       }
+      
       setInterval(updateLogs, 2000);
     
       // Handle patch form submission to trigger the patching function
@@ -135,6 +133,8 @@
           $('#patchStatus').text(response.message);
         });
       });
+
+      updateLogs();
     </script>
     
     <!-- Optional Bootstrap JS -->

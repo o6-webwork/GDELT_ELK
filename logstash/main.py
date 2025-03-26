@@ -21,13 +21,15 @@ import time
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
 DOWNLOAD_FOLDER = "./csv"
 LOG_FILE = "./logs/log.txt"
+SCRAPING_LOG_FILE = "./logs/scraping_log.txt"
+INGESTION_LOG_FILE = "./logs/ingestion_log.txt"
 
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
 
-def write(content):
+def write(content, file):
     """Write log data into log file."""
-    with open(LOG_FILE, "a") as f:
+    with open(file, "a") as f:
         f.write(content + "\n")
 
 def get_latest_gdelt_links():
@@ -38,7 +40,7 @@ def get_latest_gdelt_links():
     response = requests.get(LAST_UPDATE_URL)
     
     if response.status_code != 200:
-        write("Failed to fetch lastupdate.txt")
+        write("Failed to fetch lastupdate.txt",LOG_FILE)
         return []
     
     lines = response.text.strip().split("\n")
@@ -56,16 +58,19 @@ def download_and_extract(url, out):
     response = requests.get(url, stream=True)
     
     if response.status_code != 200:
-        write(f"Failed to get {url}")
+        write(f"Failed to get {url}",LOG_FILE)
+        write(f"Failed to get {url}",SCRAPING_LOG_FILE)
         return
     
     zip_file = zipfile.ZipFile(BytesIO(response.content))
     
     for file in zip_file.namelist():
         if file.lower().endswith("gkg.csv") and file not in out:
-            write(f"Extracting: {file}")
+            write(f"Extracting: {file}",LOG_FILE)
+            write(f"Extracting: {file}",SCRAPING_LOG_FILE)
             zip_file.extract(file, DOWNLOAD_FOLDER)
-            write(f"Completed: {file_name}")
+            write(f"Extraction completed: {file_name}", LOG_FILE)
+            write(f"Extraction completed: {file_name}",SCRAPING_LOG_FILE)
             out.append(file)
 
     return list(set(out))
@@ -267,7 +272,8 @@ def process_downloaded_files(out):
             parquet_output_path = raw_file_path.replace(".csv", ".parquet")
             json_output_path = raw_file_path.replace(".csv", ".json")
             
-            write(f"Processing file: {raw_file_path}")
+            write(f"Processing file: {raw_file_path}",LOG_FILE)
+            write(f"Processing file: {raw_file_path}",INGESTION_LOG_FILE)
             run_pipeline(raw_file_path, parquet_output_path, json_output_path)
 
 def cp_json_to_ingest(file_path):
@@ -292,14 +298,19 @@ if __name__ == "__main__":
             csv_zip_urls = get_latest_gdelt_links()
 
             if not csv_zip_urls:
-                write("No CSV ZIP links found in lastupdate.txt")
+                write("No CSV ZIP links found in lastupdate.txt",LOG_FILE)
+                write("No CSV ZIP links found in lastupdate.txt",SCRAPING_LOG_FILE)
             else:
-                write(f"Found {len(csv_zip_urls)} files to download...\n")
+                write(f"Found {len(csv_zip_urls)} files to download...",LOG_FILE)
+                write(f"Found {len(csv_zip_urls)} files to download...",SCRAPING_LOG_FILE)
                 for url in csv_zip_urls:
                     out = download_and_extract(url, out)
 
-            write("All files downloaded and extracted in the 'downloads' folder.")
             process_downloaded_files(out)
+            write("\n", LOG_FILE)
+            write("\n", SCRAPING_LOG_FILE)
+            write("\n", INGESTION_LOG_FILE)
+           
             sleep(15*60) # every 15 minutes
 
             age_threshold = 24 * 60 * 60  # 86400 seconds - 24 hours
@@ -324,4 +335,5 @@ if __name__ == "__main__":
                             os.remove(file_path)  # Delete the file
 
         except:
-            write(f"Error: {url} cannot be successfully downloaded!")
+            write(f"Error: {url} cannot be successfully downloaded!",LOG_FILE)
+            write(f"Error: {url} cannot be successfully downloaded!",SCRAPING_LOG_FILE)

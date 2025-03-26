@@ -5,12 +5,15 @@ import threading
 app = Flask(__name__)
 
 log_file = os.environ.get("LOG_FILE_PATH", "./logs/log.txt")
+scraping_log_file = os.environ.get("SCRAPING_FILE_PATH", "./logs/scraping_log.txt")
+ingestion_log_file = os.environ.get("INGESTION_FILE_PATH", "./logs/ingestion_log.txt")
 download_folder = "./csv"
+current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+": "
 
 def write(content):
     """Write log data into log file."""
     with open(log_file, "a") as f:
-        f.write(content + "\n")
+        f.write(current_time + content + "\n")
 
 @app.route('/')
 def dashboard():
@@ -18,7 +21,16 @@ def dashboard():
         data = f.read().split("\n")
     return render_template("dashboard.html", data=data)
 
-def get_pipeline_status(pipeline):
+@app.route('/logs')
+def get_logs():
+    log_file = "./logs/log.txt"  
+    if not os.path.exists(log_file):
+        return "", 200
+    with open(log_file, "r") as f:
+        data = f.read()
+    return data, 200
+
+def get_pipeline_status(pipeline, respective_log_file):
     """
     Parse the log file to determine the status of the given pipeline.
     The function looks for log entries containing the pipeline name and specific keywords:
@@ -27,26 +39,24 @@ def get_pipeline_status(pipeline):
       - "error" indicates an error occurred.
     """
     status = "idle"
-    if not os.path.exists(log_file):
+    if not os.path.exists(respective_log_file):
         return status
 
-    with open(log_file, "r") as f:
+    with open(respective_log_file, "r") as f:
         for line in f:
             if pipeline.lower() in line.lower():
                 lower_line = line.lower()
                 if "error" in lower_line:
                     status = "error"
-                elif "extracting" or "processing" in lower_line:
+                else:
                     status = "running"
-                elif "completed" in lower_line:
-                    status = "idle"
     return status
 
 @app.route('/status',methods=['GET'])
 def status():
     # Read the log file and determine each pipeline's status
-    scraping_status = get_pipeline_status("scraping")
-    ingestion_status = get_pipeline_status("ingestion")
+    scraping_status = get_pipeline_status("scraping",scraping_log_file)
+    ingestion_status = get_pipeline_status("ingestion", ingestion_log_file)
     return jsonify({
         "scraping": scraping_status,
         "ingestion": ingestion_status
@@ -66,20 +76,20 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
     while current <= now:
         # Create a timestamp string: YYYYMMDDHHMMSS with seconds always "00"
         timestamp = current.strftime("%Y%m%d%H%M%S")
-        file_url = f"{base_url}{timestamp}.export.CSV.zip"
-        local_filename = f"{timestamp}.export.CSV"
-        write(f"Patching {local_filename}...")
+        file_url = f"{base_url}{timestamp}.gkg.csv.zip"
+        local_filename = f"{timestamp}.gkg.csv"
+        write(f"Extracting {local_filename}...")
         
         try:
             response = requests.get(file_url, stream=True, timeout=10)
             if response.status_code == 200:
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
                 zip_file.extract(local_filename, download_folder)
-                write(f'Patched {local_filename}.')
+                write(f'Extracted {local_filename}.')
             else:
                 write(f"File not found or error {response.status_code} for URL: {file_url}")
         except Exception as e:
-            write(f"Error patching {local_filename}: {e}")
+            write(f"Error extracting {local_filename}: {e}")
         
         current += datetime.timedelta(minutes=15)
     
