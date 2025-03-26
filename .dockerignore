@@ -3,6 +3,8 @@ __pycache__
 *.pyc
 
 img/
+*.png
+*.md
 
 # Ignore git directory and files
 .git
