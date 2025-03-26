@@ -89,6 +89,41 @@
         </div>
       </div>
     </div>
+
+    <!-- Targeted Archival Ingestion Section -->
+    <div class="container mt-4">
+      <div class="row">
+        <div class="col-md-12">
+          <div class="card">
+            <div class="card-header">Targeted Archival Ingestion</div>
+            <div class="card-body">
+              <!-- Custom Date Range Selection -->
+              <form id="archiveForm">
+                <div class="form-row">
+                  <div class="col-md-4 mb-3">
+                    <label for="startDate">Start Date:</label>
+                    <input type="date" class="form-control" id="startDate" name="start_date" required>
+                  </div>
+                  <div class="col-md-4 mb-3">
+                    <label for="endDate">End Date:</label>
+                    <input type="date" class="form-control" id="endDate" name="end_date" required>
+                  </div>
+                  <div class="col-md-4 mb-3 align-self-end">
+                    <button type="button" id="getFilesBtn" class="btn btn-primary">Get Archive Files</button>
+                  </div>
+                </div>
+              </form>
+              <!-- List of Available Files for Selection -->
+              <div id="fileList" class="mt-3"></div>
+              <!-- Button to confirm ingestion -->
+              <button type="button" id="ingestBtn" class="btn btn-success mt-3" style="display: none;">Confirm Ingestion</button>
+              <!-- Completion Summary -->
+              <div id="ingestSummary" class="mt-3"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     
     <script>
       // Function to poll the /status endpoint and update the indicators
@@ -134,7 +169,57 @@
         });
       });
 
+      // Updates the logs as soon as webpage loads
       updateLogs();
+
+      // Function to retrieve available archive files within the custom date range
+      $("#getFilesBtn").click(function() {
+        var formData = $("#archiveForm").serialize();
+        $.post('/get_archive_files', formData, function(response) {
+          var files = response.files;
+          var html = '';
+          if(files && files.length > 0) {
+            html += '<h5>Select files to ingest:</h5>';
+            files.forEach(function(file) {
+              html += '<div class="form-check">';
+              html += '<input class="form-check-input" type="checkbox" name="selected_files" value="'+file+'" id="'+file+'">';
+              html += '<label class="form-check-label" for="'+file+'">'+file+'</label>';
+              html += '</div>';
+            });
+            $("#fileList").html(html);
+            $("#ingestBtn").show();
+          } else {
+            $("#fileList").html('<p>No archive files found for the given range.</p>');
+            $("#ingestBtn").hide();
+          }
+        }, 'json');
+      });
+    
+      // Function to trigger ingestion of selected files
+      $("#ingestBtn").click(function() {
+        var selectedFiles = [];
+        $("input[name='selected_files']:checked").each(function() {
+          selectedFiles.push($(this).val());
+        });
+        if(selectedFiles.length === 0) {
+          alert("Please select at least one file.");
+          return;
+        }
+        $.ajax({
+          url: '/ingest_archive_files',
+          type: 'POST',
+          contentType: 'application/json',
+          data: JSON.stringify({ files: selectedFiles }),
+          dataType: 'json',
+          success: function(response) {
+            var summary = "<h5>Ingestion Summary:</h5>";
+            summary += "<p>Files ingested: " + response.files_ingested + "</p>";
+            summary += "<p>Errors: " + response.errors + "</p>";
+            summary += "<p>Status: " + response.status + "</p>";
+            $("#ingestSummary").html(summary);
+          }
+        });
+      });
     </script>
     
     <!-- Optional Bootstrap JS -->
