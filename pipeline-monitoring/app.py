@@ -219,39 +219,6 @@ def get_archive_files():
     
     return jsonify({"files": available_files, "patch_status": patch_status})
 
-@app.route('/ingest_archive_files', methods=['POST'])
-def ingest_archive_files():
-    """
-    Simulates the ingestion process for selected archive files.
-    Optionally, if a date range is provided, first trigger patching_task_range 
-    to download files for that range before ingestion.
-    Expects a JSON payload with:
-      - "files": a list of selected filenames,
-      - Optionally, "start_date" and "end_date" (format: YYYY-MM-DD).
-    Returns a summary report as JSON.
-    """
-    data = request.get_json()
-    selected_files = data.get("files", [])
-    start_date = data.get("start_date")
-    end_date = data.get("end_date")
-    
-    patch_status = ""
-    if start_date and end_date:
-        patch_response = patching_task_range(start_date, end_date)
-        patch_status = patch_response.get_json().get("message", "")
-    
-    # Simulate ingestion: simply count the selected files.
-    files_ingested = len(selected_files)
-    errors = 0  # Replace with real error handling if needed.
-    status_msg = "success" if errors == 0 else "failure"
-    
-    return jsonify({
-        "files_ingested": files_ingested,
-        "errors": errors,
-        "status": status_msg,
-        "patch_status": patch_status
-    })
-
 ############################ Main ############################
 
 if __name__ == '__main__':

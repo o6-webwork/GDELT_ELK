@@ -197,29 +197,6 @@
 
       // Updates the logs as soon as webpage loads
       updateLogs();
-
-      // Function to retrieve available archive files within the custom date range
-      $("#getFilesBtn").click(function() {
-        var formData = $("#archiveForm").serialize();
-        $.post('/get_archive_files', formData, function(response) {
-          var files = response.files;
-          var html = '';
-          if(files && files.length > 0) {
-            html += '<h5>Select files to ingest:</h5>';
-            files.forEach(function(file) {
-              html += '<div class="form-check">';
-              html += '<input class="form-check-input" type="checkbox" name="selected_files" value="'+file+'" id="'+file+'">';
-              html += '<label class="form-check-label" for="'+file+'">'+file+'</label>';
-              html += '</div>';
-            });
-            $("#fileList").html(html);
-            $("#ingestBtn").show();
-          } else {
-            $("#fileList").html('<p>No archive files found for the given range.</p>');
-            $("#ingestBtn").hide();
-          }
-        }, 'json');
-      });
     
       // Function to trigger ingestion of selected files
       $("#ingestBtn").click(function() {
