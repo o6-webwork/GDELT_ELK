@@ -1,22 +1,20 @@
+import threading
 import os
 import requests
 import zipfile
 from io import BytesIO
 from time import sleep
-from pathlib import Path
 import sys
 import os
 from pyspark.sql.functions import col, struct, array_distinct
-import json
 from pyspark.sql import SparkSession
 from schemas.gkg_schema import gkg_schema
 from etl.parse_gkg import gkg_parser
 from pyspark.sql.functions import col, concat_ws
-from pyspark.sql.window import Window
-from pyspark.sql import functions as F
 import glob
 import shutil
 import time, datetime
+
 #Get download file link from web
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
 DOWNLOAD_FOLDER = "./csv"
@@ -51,11 +49,10 @@ def get_latest_gdelt_links():
     
     return urls
 
-def download_and_extract(url, out):
+def download_and_extract(url):
     """
     Downloads a ZIP file from the given URL and extracts CSV files.
-    :param url: The URL to download
-    :return: List of existing file names
+    :param url: The URL to fetch the zip files from
     """
     file_name = url.split("/")[-1]
     response = requests.get(url, stream=True)
@@ -68,22 +65,20 @@ def download_and_extract(url, out):
     zip_file = zipfile.ZipFile(BytesIO(response.content))
     
     for file in zip_file.namelist():
-        if file.lower().endswith("gkg.csv") and file not in out:
+        if file.lower().endswith("gkg.csv"):
             write(f"Extracting: {file}",LOG_FILE)
             write(f"Extracting: {file}",SCRAPING_LOG_FILE)
             zip_file.extract(file, DOWNLOAD_FOLDER)
             write(f"Extraction completed: {file_name}", LOG_FILE)
             write(f"Extraction completed: {file_name}",SCRAPING_LOG_FILE)
-            out.append(file)
-
-    return list(set(out))
-
 
 def run_pipeline(raw_file, json_output):
     """
     Reads a raw GKG CSV file, transforms each line using gkg_parser,
     creates a Spark DataFrame with the defined schema, and writes the output as a single
     JSON file.
+    :param raw_file: Directory containing raw CSV file
+    :param json_output: Path where JSON files should be output into
     """
     spark = SparkSession.builder.appName("Standalone GKG ETL").getOrCreate()
 
@@ -186,23 +181,6 @@ def run_pipeline(raw_file, json_output):
         )
     )
 
-    # df_transformed = df_transformed.withColumn(
-    #     "V21Counts",
-    #     struct(
-    #         array_distinct(col("V21Counts.CountType")).alias("CountType"),
-    #         array_distinct(col("V21Counts.Count")).alias("Count"),
-    #         array_distinct(col("V21Counts.ObjectType")).alias("ObjectType"),
-    #         array_distinct(col("V21Counts.LocationType")).alias("LocationType"),
-    #         array_distinct(col("V21Counts.FullName")).alias("FullName"),
-    #         array_distinct(col("V21Counts.CountryCode")).alias("CountryCode"),
-    #         array_distinct(col("V21Counts.ADM1Code")).alias("ADM1Code"),
-    #         array_distinct(col("V21Counts.LocationLatitude")).alias("LocationLatitude"),
-    #         array_distinct(col("V21Counts.LocationLongitude")).alias("LocationLongitude"),
-    #         array_distinct(col("V21Counts.FeatureId")).alias("FeatureId"),
-    #         array_distinct(col("V21Counts.CharOffset")).alias("CharOffset"),
-    #     )
-    # )
-
     df_transformed = df_transformed.withColumn(
         "V2EnhancedThemes",
         struct(
@@ -240,7 +218,7 @@ def run_pipeline(raw_file, json_output):
         )
     )
     
-    # change column names
+    # Changing column names
     column_names = ["V21ShareImg", "V21SocImage", "V2DocId", "V21RelImg", "V21Date"]
     for col_name in column_names:
         df_transformed = df_transformed.withColumn(col_name, col(f"{col_name}.{col_name}"))
@@ -249,21 +227,38 @@ def run_pipeline(raw_file, json_output):
     df_transformed.coalesce(1).write.mode("overwrite").json(json_output)
     print(f"Pipeline completed. Single JSON output written to {json_output}")
 
+    # Locates a JSON output file
     json_part_file = glob.glob(os.path.join(json_output, "part-00000-*.json"))[0]
+
+    # Constructing new JSON file name
     date_part = str((raw_file.split('/')[2].split('.'))[0])
     new_file_name = f"{date_part}.json"
+
+    # Moves JSON file, and copies renamed file for ingestion
     shutil.move(json_part_file, os.path.join(json_output, new_file_name))
-    cp_json_to_ingest(os.path.join(json_output, new_file_name))
+    move_json_to_ingest(os.path.join(json_output, new_file_name))
+
     spark.stop()
 
-def process_downloaded_files(out):
+def process_downloaded_files():
+    '''
+    Process downloaded CSV files, converting them into JSON format,
+    and deletes the processed CSV file.
+    '''
+    # Creates a json subfolder for JSON files to be shifted to after being processed and made
     logstash_path = "./logstash_ingest_data/json"
-    os.makedirs(logstash_path, exist_ok=True)  # Ensure the directory exists
+    os.makedirs(logstash_path, exist_ok=True)
+
+    # Creates a csv subfolder (if it does not yet exist)
     src_path = "./csv/"
     if src_path not in sys.path:
         sys.path.insert(0, src_path)
 
-    for file in out:
+    # List of files in the CSV subdirectory
+    folder_path = os.listdir("./csv")
+    folder_path = [f"./csv/{i}" for i in folder_path]
+
+    for file in folder_path:
         if file.endswith(".csv"):
             raw_file_path = os.path.join(src_path, file)
             json_output_path = raw_file_path.replace(".csv", ".json")
@@ -271,7 +266,14 @@ def process_downloaded_files(out):
             write(f"Processing file: {file}",INGESTION_LOG_FILE)
             run_pipeline(raw_file_path, json_output_path)
 
-def cp_json_to_ingest(file_path):
+            # Removes the CSV file after processing
+            os.remove(file)
+
+def move_json_to_ingest(file_path):
+    '''
+    Moves the JSON file over to the json subfolder in logstash_ingest_data.
+    :param file_path: File path of target file to be shifted.
+    '''
     logstash_path = "./logstash_ingest_data/json"
     os.makedirs(logstash_path, exist_ok=True)
     
@@ -279,15 +281,16 @@ def cp_json_to_ingest(file_path):
     if os.path.isfile(file_path) and file_path.endswith(".json"):
         # Get the filename from the full path and copy to the target directory
         target_path = os.path.join(logstash_path, os.path.basename(file_path))
-        shutil.copy(file_path, target_path)
+        shutil.move(file_path, target_path)
         print(f"Copied {file_path} to {target_path}")
     else:
         print(f"Invalid file: {file_path} (Not a .json file or file doesn't exist)")
 
-        
-if __name__ == "__main__":
-    out = []
-
+def server_scrape():
+    '''
+    Scrapes data off the GDELT server,
+    and downloads the resultant CSV files every 15 minutes.
+    '''
     while True:
         try:
             csv_zip_urls = get_latest_gdelt_links()
@@ -299,37 +302,57 @@ if __name__ == "__main__":
                 write(f"Found {len(csv_zip_urls)} files to download...",LOG_FILE)
                 write(f"Found {len(csv_zip_urls)} files to download...",SCRAPING_LOG_FILE)
                 for url in csv_zip_urls:
-                    out = download_and_extract(url, out)
+                    download_and_extract(url)
 
-            process_downloaded_files(out)
-            write("\n", LOG_FILE)
-            write("\n", SCRAPING_LOG_FILE)
-            write("\n", INGESTION_LOG_FILE)
             write("\n", TIMESTAMP_LOG_FILE)
 
-            sleep(15*60) # every 15 minutes
-
-            age_threshold = 24 * 60 * 60  # 86400 seconds - 24 hours
-
-            # Get the current time
-            current_time = time.time()
-
-            # Loop through files in the directory
-            directory = "./logstash_ingest_data/json"
-            for filename in os.listdir(directory):
-                file_path = os.path.join(directory, filename)
-
-                # Check if it's a file (not a directory)
-                if os.path.isfile(file_path):
-                    if file_path.endswith(".json"):
-                        # Get the last modification time
-                        file_mod_time = os.path.getmtime(file_path)
-
-                        # Check if the file is older than 24 hours
-                        if (current_time - file_mod_time) > age_threshold:
-                            print(f"Deleting: {file_path}")
-                            os.remove(file_path)  # Delete the file
+            # Repeats the scraping and downloading process every 15 min
+            sleep(15*60)     
 
         except:
             write(f"Error: {url} cannot be successfully downloaded!",LOG_FILE)
             write(f"Error: {url} cannot be successfully downloaded!",SCRAPING_LOG_FILE)
+
+def json_convert():
+    '''
+    Checks for new CSV files, converts the data to JSON format every 2 sec.
+    Deletes CSV files once converted into JSON files.
+    '''
+    process_downloaded_files()
+    write("\n", LOG_FILE)
+    write("\n", SCRAPING_LOG_FILE)
+    write("\n", INGESTION_LOG_FILE)
+
+def folder_clean():
+    '''
+    Constantly checks for unneeded JSON files,
+    and deletes if necessary.
+    '''
+    while True:
+        age_threshold = 24 * 60 * 60
+        current_time = time.time()
+
+        # Cleaning JSON folders
+        directory = "./logstash_ingest_data/json"
+        for filename in os.listdir(directory):
+            file_path = os.path.join(directory, filename)
+
+            # Check if it's a file
+            if os.path.isfile(file_path) and file_path.endswith(".json"):
+                    # Get the last modification time
+                    file_mod_time = os.path.getmtime(file_path)
+
+                    # Deletes file if it is older than 24 hours
+                    if (current_time - file_mod_time) > age_threshold:
+                        print(f"Deleting: {file_path}")
+                        os.remove(file_path)
+
+############################################# Main #############################################
+if __name__ == "__main__":
+    thread1 = threading.Thread(target=server_scrape, daemon=True)
+    thread2 = threading.Thread(target=json_convert, daemon=True)
+    thread3 = threading.Thread(target=folder_clean, daemon=True)
+    
+    thread1.start()
+    thread2.start()
+    thread3.start()
