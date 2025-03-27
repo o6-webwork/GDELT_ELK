@@ -25,6 +25,14 @@
         white-space: pre-wrap;
         font-family: monospace;
       }
+      .log-container {
+      background: #f8f8f8;
+      border: 1px solid #ccc;
+      padding: 15px;
+      font-family: monospace;
+      height: 300px;
+      white-space: pre-wrap;
+    }
     </style>
   </head>
   <body>
@@ -39,7 +47,7 @@
               <span id="scrapingIndicator" class="status-indicator bg-secondary ml-2"></span>
             </div>
             <div class="card-body">
-              <p>Status is determined by parsing the log file entries.</p>
+              <div id="scrapingLog" class="log-container"></div>
             </div>
           </div>
         </div>
@@ -51,7 +59,7 @@
               <span id="ingestionIndicator" class="status-indicator bg-secondary ml-2"></span>
             </div>
             <div class="card-body">
-              <p>Status is determined by parsing the log file entries.</p>
+              <div id="ingestionLog" class="log-container"></div>
             </div>
           </div>
         </div>
@@ -151,13 +159,32 @@
       
       // Poll the status every second for real-time updates
       setInterval(updateStatus, 1000);
+      
+      function updateScrapingLogs() {
+      $.getJSON('/scraping_logs', function(data) {
+        $('#scrapingLog').text(data.lines.join(""));
+      });
+    }
+    
+    // Function to update ingestion logs
+    function updateIngestionLogs() {
+      $.getJSON('/ingestion_logs', function(data) {
+        $('#ingestionLog').text(data.lines.join(""));
+      });
+    }
+      setInterval(updateScrapingLogs, 2000);
+      setInterval(updateIngestionLogs, 2000);
+      updateScrapingLogs();
+      updateIngestionLogs();
+
 
       function updateLogs() {
         $.get('/logs', function(data) {
           $('#logPanel').text(data);
+          $logContainer.scrollTop($logContainer[0].scrollHeight);
         });
       }
-      
+
       setInterval(updateLogs, 2000);
     
       // Handle patch form submission to trigger the patching function

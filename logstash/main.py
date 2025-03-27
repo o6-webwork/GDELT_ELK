@@ -16,7 +16,7 @@ from pyspark.sql.window import Window
 from pyspark.sql import functions as F
 import glob
 import shutil
-import time
+import time, datetime
 #Get download file link from web
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
 DOWNLOAD_FOLDER = "./csv"
@@ -27,10 +27,12 @@ INGESTION_LOG_FILE = "./logs/ingestion_log.txt"
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
 
+current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+": "
+
 def write(content, file):
     """Write log data into log file."""
     with open(file, "a") as f:
-        f.write(content + "\n")
+        f.write(current_time + content + "\n")
 
 def get_latest_gdelt_links():
     """
