@@ -14,10 +14,14 @@ app = Flask(__name__)
 log_file = os.environ.get("LOG_FILE_PATH", "./logs/log.txt")
 scraping_log_file = os.environ.get("SCRAPING_FILE_PATH", "./logs/scraping_log.txt")
 ingestion_log_file = os.environ.get("INGESTION_FILE_PATH", "./logs/ingestion_log.txt")
+timestamp_log_file = os.environ.get("TIMESTAMP_FILE_PATH", "./logs/timestamp_log.txt")
 download_folder = "./csv"
 
 # Archive directory for targeted ingestion (update as needed)
 archive_dir = os.environ.get("ARCHIVE_DIR", "./archives")
+
+#Additional parameters
+INTERVAL = 15 * 60 #15 minutes delay
 
 ############################ Helper Functions ############################
 
@@ -35,6 +39,38 @@ def displaying_logs(file_path, n=6):
         lines = [line for line in f.readlines() if line.strip()]
     return lines[-n:]
 
+def get_remaining_time():
+    """
+    Reads the log file to get the latest timestamp,
+    then calculates and returns the remaining time (in seconds)
+    until the next run.
+    """
+    try:
+        with open(timestamp_log_file, "r") as f:
+            # Read the last non-empty line
+            lines = [line.strip() for line in f if line.strip()]
+            if not lines:
+                return None  # or handle as needed
+            last_timestamp = lines[-1]
+            # Remove any trailing colon
+            last_timestamp = last_timestamp.rstrip(':')
+            
+            # Parse the last timestamp into a datetime object
+            last_run_dt = datetime.datetime.strptime(last_timestamp, "%Y-%m-%d %H:%M:%S")
+            # Calculate the next scheduled run time
+            next_run_dt = last_run_dt + datetime.timedelta(seconds=INTERVAL)
+            now_dt = datetime.datetime.now()
+            
+            # Calculate remaining seconds (ensure it's not negative)
+            remaining_seconds = max(0, int((next_run_dt - now_dt).total_seconds()))
+            # Convert seconds to minutes and seconds
+            minutes, seconds = divmod(remaining_seconds, 60)
+            
+            return f"{minutes} m, {seconds} s"
+    except Exception as e:
+        print(f"Error reading log file: {e}")
+        return None
+    
 def get_pipeline_status(pipeline, respective_log_file):
     """
     Parse the log file to determine the status of the given pipeline.
@@ -152,6 +188,13 @@ def dashboard():
     else:
         data = []
     return render_template("dashboard.html", data=data)
+
+@app.route("/remaining")
+def remaining():
+    remaining_time = get_remaining_time()
+    if remaining_time is None:
+        return jsonify(error="Error reading log file"), 500
+    return jsonify(remaining=remaining_time)
 
 @app.route('/logs')
 def get_logs():

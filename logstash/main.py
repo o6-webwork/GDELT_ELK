@@ -23,6 +23,7 @@ DOWNLOAD_FOLDER = "./csv"
 LOG_FILE = "./logs/log.txt"
 SCRAPING_LOG_FILE = "./logs/scraping_log.txt"
 INGESTION_LOG_FILE = "./logs/ingestion_log.txt"
+TIMESTAMP_LOG_FILE = "./logs/timestamp_log.txt"
 
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
@@ -266,8 +267,8 @@ def process_downloaded_files(out):
         if file.endswith(".csv"):
             raw_file_path = os.path.join(src_path, file)
             json_output_path = raw_file_path.replace(".csv", ".json")
-            write(f"Processing file: {raw_file_path}",LOG_FILE)
-            write(f"Processing file: {raw_file_path}",INGESTION_LOG_FILE)
+            write(f"Processing file: {file}",LOG_FILE)
+            write(f"Processing file: {file}",INGESTION_LOG_FILE)
             run_pipeline(raw_file_path, json_output_path)
 
 def cp_json_to_ingest(file_path):
@@ -304,7 +305,8 @@ if __name__ == "__main__":
             write("\n", LOG_FILE)
             write("\n", SCRAPING_LOG_FILE)
             write("\n", INGESTION_LOG_FILE)
-           
+            write("\n", TIMESTAMP_LOG_FILE)
+
             sleep(15*60) # every 15 minutes
 
             age_threshold = 24 * 60 * 60  # 86400 seconds - 24 hours

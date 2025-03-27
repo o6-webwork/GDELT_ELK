@@ -43,15 +43,21 @@
         <!-- Scraping Pipeline Panel -->
         <div class="col-md-6 mb-3">
           <div class="card">
-            <div class="card-header">
-              Scraping Pipeline
-              <span id="scrapingIndicator" class="status-indicator bg-secondary ml-2"></span>
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <div>
+                Scraping Pipeline
+                <span id="scrapingIndicator" class="status-indicator bg-secondary ml-2"></span>
+              </div>
+              <div>
+                Scraping again in: <span id="remaining">Loading...</span>
+              </div>
             </div>
             <div class="card-body">
               <div id="scrapingLog" class="log-container"></div>
             </div>
           </div>
         </div>
+        
         <!-- Ingestion Pipeline Panel -->
         <div class="col-md-6 mb-3">
           <div class="card">
@@ -65,25 +71,40 @@
           </div>
         </div>
       </div>
-    <div class="container mt-4">
-      <div class="row">
-        <div class="col-md-6">
-          <div class="card">
-            <div class="card-header">Patching Files</div>
-            <div class="card-body">
-              <form id="patchForm">
-                <div class="form-group">
-                  <label for="lookBackDays">Look Back Period (days):</label>
-                  <input type="number" id="lookBackDays" name="look_back_days" class="form-control" value="1" min="1">
-                </div>
-                <button type="submit" class="btn btn-primary">Start Patching</button>
-              </form>
-              <div id="patchStatus" class="mt-2"></div>
+      <div class="container mt-4">
+        <div class="row">
+          <div class="col-md-12">
+            <div class="card">
+              <div class="card-header">Patching Files</div>
+              <div class="card-body">
+                <form id="patchForm">
+                  <!-- Use a row with .form-row or .row and align items at the bottom -->
+                  <div class="form-row align-items-end">
+                    <!-- Label + Input in a .col-auto so it takes up minimal space -->
+                    <div class="col-auto">
+                      <label for="lookBackDays">Look Back Period (days):</label>
+                      <!-- Limit the width with inline CSS or a custom class -->
+                      <input type="number" 
+                             id="lookBackDays" 
+                             name="look_back_days" 
+                             class="form-control" 
+                             value="1" 
+                             min="1" 
+                             style="width:400px;">
+                    </div>
+                    <!-- Button in its own .col-auto so it sits on the same line -->
+                    <div class="col-auto">
+                      <button type="submit" class="btn btn-primary">Start Patching</button>
+                    </div>
+                  </div>
+                </form>
+                <div id="patchStatus" class="mt-2"></div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-
+      
     <!-- Targeted Archival Ingestion Section -->
     <div class="container mt-4">
       <div class="row">
@@ -107,8 +128,10 @@
                   </div>
                 </div>
               </form>
-              <!-- Success message -->
+              <!-- List of Available Files for Selection -->
               <div id="fileList" class="mt-3"></div>
+              <!-- Button to confirm ingestion -->
+              <button type="button" id="ingestBtn" class="btn btn-success mt-3" style="display: none;">Confirm Ingestion</button>
               <!-- Completion Summary -->
               <div id="ingestSummary" class="mt-3"></div>
             </div>
@@ -132,6 +155,15 @@
     </div>
     
     <script>
+      // Poll the /remaining endpoint every second to update the countdown.
+      function updateRemaining() {
+        $.getJSON('/remaining', function(data) {
+            $('#remaining').text(data.remaining);
+        });
+      }
+      setInterval(updateRemaining, 1000);
+      updateRemaining();
+      
       // Function to poll the /status endpoint and update the indicators
       function updateStatus() {
         $.getJSON('/status', function(data) {
@@ -196,40 +228,31 @@
 
       // Updates the logs as soon as webpage loads
       updateLogs();
-
-      // Function to retrieve available archive files within the custom date range
-      $("#getFilesBtn").click(function() {
-        // Get the date values from the input fields
-        var startDateStr = $("#startDate").val();
-        var endDateStr = $("#endDate").val();
-        
-        // Convert the string dates to JavaScript Date objects
-        var startDate = new Date(startDateStr);
-        var endDate = new Date(endDateStr);
-        var now = new Date();
-
-        // Check if start date is later than end date
-        if (startDate > endDate) {
-          alert("Error: The start date must not be later than the end date.");
+    
+      // Function to trigger ingestion of selected files
+      $("#ingestBtn").click(function() {
+        var selectedFiles = [];
+        $("input[name='selected_files']:checked").each(function() {
+          selectedFiles.push($(this).val());
+        });
+        if(selectedFiles.length === 0) {
+          alert("Please select at least one file.");
           return;
         }
-        
-        // Check if either date is in the future
-        if (startDate > now || endDate > now) {
-          alert("Error: Start and End dates must not be in the future.");
-          return;
-        }
-        
-        // If validation passes, serialize the form data and send the AJAX request
-        var formData = $("#archiveForm").serialize();
-        $.post('/get_archive_files', formData, function(response) {
-          // Use the patch_status message returned by the endpoint, or a default message
-          var message = response.patch_status || "CSV files downloaded successfully.";
-          // Display the message in the fileList div
-          $("#fileList").html('<p>' + message + '</p>');
-          // Show the Confirm Ingestion button
-          $("#ingestBtn").show();
-        }, 'json');
+        $.ajax({
+          url: '/ingest_archive_files',
+          type: 'POST',
+          contentType: 'application/json',
+          data: JSON.stringify({ files: selectedFiles }),
+          dataType: 'json',
+          success: function(response) {
+            var summary = "<h5>Ingestion Summary:</h5>";
+            summary += "<p>Files ingested: " + response.files_ingested + "</p>";
+            summary += "<p>Errors: " + response.errors + "</p>";
+            summary += "<p>Status: " + response.status + "</p>";
+            $("#ingestSummary").html(summary);
+          }
+        });
       });
     </script>
     
