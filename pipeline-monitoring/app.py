@@ -66,7 +66,7 @@ def get_remaining_time():
             # Convert seconds to minutes and seconds
             minutes, seconds = divmod(remaining_seconds, 60)
             
-            return f"{minutes} m, {seconds} s"
+            return f"{minutes} min {seconds} sec"
     except Exception as e:
         print(f"Error reading log file: {e}")
         return None

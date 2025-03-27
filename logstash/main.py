@@ -243,31 +243,29 @@ def run_pipeline(raw_file, json_output):
 def process_downloaded_files():
     '''
     Process downloaded CSV files, converting them into JSON format,
-    and deletes the processed CSV file.
+    and delete the processed CSV file.
     '''
-    # Creates a json subfolder for JSON files to be shifted to after being processed and made
+    # Create the JSON subfolder if it does not exist.
     logstash_path = "./logstash_ingest_data/json"
     os.makedirs(logstash_path, exist_ok=True)
 
-    # Creates a csv subfolder (if it does not yet exist)
-    src_path = "./csv/"
-    if src_path not in sys.path:
-        sys.path.insert(0, src_path)
+    # Source directory for CSV files
+    src_path = "./csv"
+    # List only the filenames in the CSV folder
+    files = os.listdir(src_path)
 
-    # List of files in the CSV subdirectory
-    folder_path = os.listdir("./csv")
-    folder_path = [f"./csv/{i}" for i in folder_path]
-
-    for file in folder_path:
+    for file in files:
         if file.endswith(".csv"):
+            # Build the full path to the file
             raw_file_path = os.path.join(src_path, file)
+            # Create the JSON output path by replacing .csv with .json
             json_output_path = raw_file_path.replace(".csv", ".json")
-            write(f"Processing file: {file}",LOG_FILE)
-            write(f"Processing file: {file}",INGESTION_LOG_FILE)
+            write(f"Processing file: {file}", LOG_FILE)
+            write(f"Processing file: {file}", INGESTION_LOG_FILE)
             run_pipeline(raw_file_path, json_output_path)
-
-            # Removes the CSV file after processing
-            os.remove(file)
+            
+            # Remove the CSV file using its full path
+            os.remove(raw_file_path)
 
 def move_json_to_ingest(file_path):
     '''
@@ -356,3 +354,6 @@ if __name__ == "__main__":
     thread1.start()
     thread2.start()
     thread3.start()
+    thread1.join()
+    thread2.join()
+    thread3.join()
