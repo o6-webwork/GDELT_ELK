@@ -107,10 +107,8 @@
                   </div>
                 </div>
               </form>
-              <!-- List of Available Files for Selection -->
+              <!-- Success message -->
               <div id="fileList" class="mt-3"></div>
-              <!-- Button to confirm ingestion -->
-              <button type="button" id="ingestBtn" class="btn btn-success mt-3" style="display: none;">Confirm Ingestion</button>
               <!-- Completion Summary -->
               <div id="ingestSummary" class="mt-3"></div>
             </div>
@@ -232,33 +230,6 @@
           // Show the Confirm Ingestion button
           $("#ingestBtn").show();
         }, 'json');
-      });
-
-    
-      // Function to trigger ingestion of selected files
-      $("#ingestBtn").click(function() {
-        var selectedFiles = [];
-        $("input[name='selected_files']:checked").each(function() {
-          selectedFiles.push($(this).val());
-        });
-        if(selectedFiles.length === 0) {
-          alert("Please select at least one file.");
-          return;
-        }
-        $.ajax({
-          url: '/ingest_archive_files',
-          type: 'POST',
-          contentType: 'application/json',
-          data: JSON.stringify({ files: selectedFiles }),
-          dataType: 'json',
-          success: function(response) {
-            var summary = "<h5>Ingestion Summary:</h5>";
-            summary += "<p>Files ingested: " + response.files_ingested + "</p>";
-            summary += "<p>Errors: " + response.errors + "</p>";
-            summary += "<p>Status: " + response.status + "</p>";
-            $("#ingestSummary").html(summary);
-          }
-        });
       });
     </script>
     
