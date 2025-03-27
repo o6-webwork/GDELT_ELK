@@ -78,11 +78,11 @@ def download_and_extract(url, out):
     return list(set(out))
 
 
-def run_pipeline(raw_file, parquet_output, json_output):
+def run_pipeline(raw_file, json_output):
     """
     Reads a raw GKG CSV file, transforms each line using gkg_parser,
     creates a Spark DataFrame with the defined schema, and writes the output as a single
-    Parquet file and a single JSON file.
+    JSON file.
     """
     spark = SparkSession.builder.appName("Standalone GKG ETL").getOrCreate()
 
@@ -253,12 +253,6 @@ def run_pipeline(raw_file, parquet_output, json_output):
     new_file_name = f"{date_part}.json"
     shutil.move(json_part_file, os.path.join(json_output, new_file_name))
     cp_json_to_ingest(os.path.join(json_output, new_file_name))
-    # # Write as a single Parquet file.
-    # df_transformed.write.mode("overwrite").parquet(parquet_output)
-    # print(f"Pipeline completed. Single Parquet output written to {parquet_output}")
-    
-    # Write as a single JSON file.
-
     spark.stop()
 
 def process_downloaded_files(out):
@@ -271,12 +265,10 @@ def process_downloaded_files(out):
     for file in out:
         if file.endswith(".csv"):
             raw_file_path = os.path.join(src_path, file)
-            parquet_output_path = raw_file_path.replace(".csv", ".parquet")
             json_output_path = raw_file_path.replace(".csv", ".json")
-            
             write(f"Processing file: {raw_file_path}",LOG_FILE)
             write(f"Processing file: {raw_file_path}",INGESTION_LOG_FILE)
-            run_pipeline(raw_file_path, parquet_output_path, json_output_path)
+            run_pipeline(raw_file_path, json_output_path)
 
 def cp_json_to_ingest(file_path):
     logstash_path = "./logstash_ingest_data/json"
