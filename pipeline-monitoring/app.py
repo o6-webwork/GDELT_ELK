@@ -30,6 +30,11 @@ def write(content):
     with open(log_file, "a") as f:
         f.write(current_time + content + "\n")
 
+def displaying_logs(file_path, n=6):
+    with open(file_path, "r") as f:
+        lines = [line for line in f.readlines() if line.strip()]
+    return lines[-n:]
+
 def get_pipeline_status(pipeline, respective_log_file):
     """
     Parse the log file to determine the status of the given pipeline.
@@ -61,6 +66,7 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
     if start_adjust != 0:
         start = start - datetime.timedelta(minutes=start_adjust)
     current = start
+    write(f"Patching files from {look_back_days} days ago...")
     while current <= now:
         timestamp = current.strftime("%Y%m%d%H%M%S")
         file_url = f"{base_url}{timestamp}.gkg.csv.zip"
@@ -99,8 +105,8 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
     start_adjust = start.minute % 15
     if start_adjust != 0:
         start = start - datetime.timedelta(minutes=start_adjust)
-    
     current = start
+    write(f"Patching files from {start_date_str} to {end_date_str}...")
     while current <= end:
         # Create a timestamp string: YYYYMMDDHHMMSS (seconds always "00")
         timestamp = current.strftime("%Y%m%d%H%M%S")
@@ -156,6 +162,16 @@ def get_logs():
     with open(log_file, "r") as f:
         data = f.read()
     return data, 200
+
+@app.route('/scraping_logs', methods=['GET'])
+def displaying_scraping_logs():
+    scraping_logs = displaying_logs(scraping_log_file)
+    return jsonify({"lines": scraping_logs})
+
+@app.route('/ingestion_logs', methods=['GET'])
+def displaying_ingestion_logs():
+    ingestion_logs = displaying_logs(ingestion_log_file)
+    return jsonify({"lines": ingestion_logs})
 
 @app.route('/status', methods=['GET'])
 def status():
