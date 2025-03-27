@@ -96,6 +96,7 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
     try:
         start = datetime.datetime.strptime(start_date_str, "%Y-%m-%d")
         end = datetime.datetime.strptime(end_date_str, "%Y-%m-%d")
+        end = end + datetime.timedelta(days=1) - datetime.timedelta(microseconds=1)
     except Exception as e:
         write(f"Error parsing dates: {e}")
         return jsonify({"message": "Invalid date format."})
@@ -224,6 +225,8 @@ def get_archive_files():
     available_files = []
     start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
     end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+    end_dt = end_dt + datetime.timedelta(days=1) - datetime.timedelta(microseconds=1)
+
     # Look for files named like "YYYYMMDDHHMMSS.gkg.csv"
     for f in all_files:
         try:

@@ -197,6 +197,42 @@
 
       // Updates the logs as soon as webpage loads
       updateLogs();
+
+      // Function to retrieve available archive files within the custom date range
+      $("#getFilesBtn").click(function() {
+        // Get the date values from the input fields
+        var startDateStr = $("#startDate").val();
+        var endDateStr = $("#endDate").val();
+        
+        // Convert the string dates to JavaScript Date objects
+        var startDate = new Date(startDateStr);
+        var endDate = new Date(endDateStr);
+        var now = new Date();
+
+        // Check if start date is later than end date
+        if (startDate > endDate) {
+          alert("Error: The start date must not be later than the end date.");
+          return;
+        }
+        
+        // Check if either date is in the future
+        if (startDate > now || endDate > now) {
+          alert("Error: Start and End dates must not be in the future.");
+          return;
+        }
+        
+        // If validation passes, serialize the form data and send the AJAX request
+        var formData = $("#archiveForm").serialize();
+        $.post('/get_archive_files', formData, function(response) {
+          // Use the patch_status message returned by the endpoint, or a default message
+          var message = response.patch_status || "CSV files downloaded successfully.";
+          // Display the message in the fileList div
+          $("#fileList").html('<p>' + message + '</p>');
+          // Show the Confirm Ingestion button
+          $("#ingestBtn").show();
+        }, 'json');
+      });
+
     
       // Function to trigger ingestion of selected files
       $("#ingestBtn").click(function() {
