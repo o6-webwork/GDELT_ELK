@@ -25,6 +25,7 @@
         white-space: pre-wrap;
         font-family: monospace;
       }
+      /* Scraping and Ingestion log container styling */ 
       .log-container {
       background: #f8f8f8;
       border: 1px solid #ccc;
@@ -32,7 +33,7 @@
       font-family: monospace;
       height: 300px;
       white-space: pre-wrap;
-    }
+      }
     </style>
   </head>
   <body>
@@ -73,7 +74,7 @@
               <form id="patchForm">
                 <div class="form-group">
                   <label for="lookBackDays">Look Back Period (days):</label>
-                  <input type="number" id="lookBackDays" name="look_back_days" class="form-control" value="5" min="1">
+                  <input type="number" id="lookBackDays" name="look_back_days" class="form-control" value="1" min="1">
                 </div>
                 <button type="submit" class="btn btn-primary">Start Patching</button>
               </form>
