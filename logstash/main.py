@@ -298,6 +298,10 @@ def process_downloaded_files():
                     print(f"Deleting: {file_path}")
                     os.remove(file_path)
 
+    # Cleaning processed files
+    for folder_path in os.listdir(src_path):
+        if ".gkg.json" in folder_path: shutil.rmtree(os.path.join(src_path, folder_path))
+
 def move_json_to_ingest(file_path):
     '''
     Moves the JSON file over to the json subfolder in logstash_ingest_data.
