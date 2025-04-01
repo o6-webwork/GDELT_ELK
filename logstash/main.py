@@ -33,6 +33,9 @@ def write(content, file):
     '''
     Logs messages to a text file, keeping only the first 500 lines of log text.
     '''
+    if not content:
+        return
+    
     timezone = pytz.timezone("Asia/Singapore")  # or "Asia/Shanghai", "Asia/Manila", etc.
     current_time_gmt8 = datetime.datetime.now(timezone)
     current_time = current_time_gmt8.strftime("%Y-%m-%d %H:%M:%S") + ": "
@@ -346,7 +349,9 @@ def json_convert():
     '''
     while True:
         process_downloaded_files()
-        sleep(2)  
+        write("\n", LOG_FILE)
+        write("\n", SCRAPING_LOG_FILE)
+        write("\n", INGESTION_LOG_FILE)  
 
 ############################################# Main #############################################
 if __name__ == "__main__":
