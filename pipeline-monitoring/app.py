@@ -16,9 +16,6 @@ ingestion_log_file = os.environ.get("INGESTION_FILE_PATH", "./logs/ingestion_log
 timestamp_log_file = os.environ.get("TIMESTAMP_FILE_PATH", "./logs/timestamp_log.txt")
 download_folder = "./csv"
 
-# Archive directory for targeted ingestion (update as needed)
-archive_dir = os.environ.get("ARCHIVE_DIR", "./archives")
-
 #Additional parameters
 INTERVAL = 15 * 60 #15 minutes delay
 
@@ -29,7 +26,7 @@ def write(content):
     Write log data into the log file.
     Note: This uses a static timestamp; consider updating to get the current time each call.
     """
-    timezone = pytz.timezone("Asia/Singapore")  # or "Asia/Shanghai", "Asia/Manila", etc.
+    timezone = pytz.timezone("Asia/Singapore")
     current_time_gmt8 = datetime.datetime.now(timezone)
     current_time = current_time_gmt8.strftime("%Y-%m-%d %H:%M:%S") + ": "
     with open(log_file, "a") as f:
