@@ -33,19 +33,8 @@ def write(content, file):
     timezone = pytz.timezone("Asia/Singapore")  # or "Asia/Shanghai", "Asia/Manila", etc.
     current_time_gmt8 = datetime.datetime.now(timezone)
     current_time = current_time_gmt8.strftime("%Y-%m-%d %H:%M:%S") + ": "
-    try:
-        with open(file, "r", encoding="utf-8") as f:
-            messages = f.readlines()
-    except Exception as e:
-        with open(file, "w", encoding="utf-8") as f:
-            f.write("Created new log file for scraping thread.")
-            messages = []
-
-    messages.append(current_time + content + "\n")
-    messages = messages[-500:]
-
-    with open(file, "w", encoding="utf-8") as f:
-        f.writelines(messages)
+    with open(file, "a", encoding="utf-8") as f:
+        f.writelines(current_time + content + "\n")
 
 def get_latest_gdelt_links():
     """

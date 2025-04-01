@@ -32,14 +32,8 @@ def write(content):
     timezone = pytz.timezone("Asia/Singapore")  # or "Asia/Shanghai", "Asia/Manila", etc.
     current_time_gmt8 = datetime.datetime.now(timezone)
     current_time = current_time_gmt8.strftime("%Y-%m-%d %H:%M:%S") + ": "
-    with open(log_file, "r") as f:
-        lines = f.readlines()
-
-    lines.append(current_time + content + "\n")
-    lines = lines[-500:]
-
-    with open(log_file, "w") as f:
-        f.writelines(lines)
+    with open(log_file, "a") as f:
+        f.append(current_time + content + "\n")
 
 def displaying_logs(file_path, n=6):
     with open(file_path, "r") as f:
@@ -131,8 +125,8 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
         current += datetime.timedelta(minutes=15)
     write(f"Patching files from {look_back_days} days ago completed.")
     msg = f'''Number of files ingested: {num_files_success}
-Number of file errors: {num_files_error}
-Ingestion status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% success'''
+    Number of file errors: {num_files_error}
+    Ingestion status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% success'''
     write(msg)
     # Note: Returning a JSON response here isn’t used when running in a background thread.
     return jsonify({"message": f"Patching files from {look_back_days} days ago completed."})
@@ -220,14 +214,9 @@ def remaining():
 
 @app.route('/logs')
 def get_logs():
-    """
-    Returns the contents of the log file.
-    """
-    if not os.path.exists(log_file):
-        return "", 200
-    with open(log_file, "r") as f:
-        data = f.read()
-    return data, 200
+    logs = displaying_logs(log_file,500)
+    logs = [line.rstrip() for line in logs]
+    return jsonify({"lines": logs})
 
 @app.route('/scraping_logs', methods=['GET'])
 def displaying_scraping_logs():

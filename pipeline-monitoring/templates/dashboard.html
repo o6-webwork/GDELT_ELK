@@ -51,9 +51,6 @@
               <div>
                 Scraping again in: <span id="remaining">Loading...</span>
               </div>
-              <button class="btn btn-sm btn-link" type="button" data-toggle="collapse" data-target="#scrapingLogCollapse" aria-expanded="true" aria-controls="scrapingLogCollapse">
-                Toggle Logs
-              </button>
             </div>
             <div id="scrapingLogCollapse" class="collapse show">
               <div class="card-body">
@@ -71,9 +68,7 @@
                 Ingestion Pipeline
                 <span id="ingestionIndicator" class="status-indicator bg-secondary ml-2"></span>
               </div>
-              <button class="btn btn-sm btn-link" type="button" data-toggle="collapse" data-target="#ingestionLogCollapse" aria-expanded="true" aria-controls="ingestionLogCollapse">
-                Toggle Logs
-              </button>
+              
             </div>
             <div id="ingestionLogCollapse" class="collapse show">
               <div class="card-body">
@@ -230,12 +225,17 @@
       updateIngestionLogs();
       
       function updateLogs() {
-        $.get('/logs', function(data) {
-          $('#logPanel').text(data);
-        });
-      }
-      setInterval(updateLogs, 2000);
-      updateLogs();
+      $.getJSON('/logs', function(data) {
+        if (data && data.lines && Array.isArray(data.lines)) {
+          let logContent = data.lines.join("\n");
+          $('#logPanel').text(logContent);
+        } else {
+          $('#logPanel').text("No logs available");
+        }
+      });
+    }
+    setInterval(updateLogs, 2000);
+    updateLogs();
       
       // Handle patch form submission to trigger the patching function
       $('#patchForm').submit(function(e) {
