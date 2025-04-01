@@ -35,7 +35,7 @@ def write(content):
         lines = f.readlines()
 
     lines.append(current_time + content + "\n")
-    lines = lines[:-500]
+    lines = lines[-500:]
 
     with open(log_file, "w") as f:
         f.writelines(lines)
