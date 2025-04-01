@@ -30,7 +30,7 @@ def write(content):
     current_time_gmt8 = datetime.datetime.now(timezone)
     current_time = current_time_gmt8.strftime("%Y-%m-%d %H:%M:%S") + ": "
     with open(log_file, "a") as f:
-        f.append(current_time + content + "\n")
+        f.write(current_time + content + "\n")
 
 def displaying_logs(file_path, n=6):
     with open(file_path, "r") as f:

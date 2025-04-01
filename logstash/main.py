@@ -34,7 +34,7 @@ def write(content, file):
     current_time_gmt8 = datetime.datetime.now(timezone)
     current_time = current_time_gmt8.strftime("%Y-%m-%d %H:%M:%S") + ": "
     with open(file, "a", encoding="utf-8") as f:
-        f.writelines(current_time + content + "\n")
+        f.write(current_time + content + "\n")
 
 def get_latest_gdelt_links():
     """
