@@ -31,8 +31,14 @@ def write(content):
     Note: This uses a static timestamp; consider updating to get the current time each call.
     """
     current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ": "
-    with open(log_file, "a") as f:
-        f.write(current_time + content + "\n")
+    with open(log_file, "r") as f:
+        lines = f.readlines()
+
+    lines.append(current_time + content + "\n")
+    lines = lines[:-500]
+
+    with open(log_file, "w") as f:
+        f.writelines(lines)
 
 def displaying_logs(file_path, n=6):
     with open(file_path, "r") as f:
