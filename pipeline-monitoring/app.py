@@ -95,6 +95,7 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
     Downloads CSV files from the GDELT archive based on a look-back period.
     Files are expected at 15-minute intervals.
     """
+    num_files_success, num_files_error = 0, 0
     now = datetime.datetime.now()
     start = now - datetime.timedelta(days=int(look_back_days))
     start = start.replace(second=0, microsecond=0)
@@ -113,13 +114,19 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
             if response.status_code == 200:
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
                 zip_file.extract(local_filename, download_folder)
+                num_files_success += 1
                 write(f"Extracted {local_filename}.")
             else:
                 write(f"File not found or error {response.status_code} for URL: {file_url}")
         except Exception as e:
+            num_files_error += 1
             write(f"Error extracting {local_filename}: {e}")
         current += datetime.timedelta(minutes=15)
     write(f"Patching files from {look_back_days} days ago completed.")
+    msg = f'''Number of files ingested: {num_files_success}
+Number of file errors: {num_files_error}
+Ingestion status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% success'''
+    write(msg)
     # Note: Returning a JSON response here isn’t used when running in a background thread.
     return jsonify({"message": f"Patching files from {look_back_days} days ago completed."})
 
@@ -129,6 +136,7 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
     Expects start_date_str and end_date_str in the format "YYYY-MM-DD".
     Files are expected at 15-minute intervals.
     """
+    num_files_success, num_files_error = 0, 0
     try:
         start = datetime.datetime.strptime(start_date_str, "%Y-%m-%d")
         end = datetime.datetime.strptime(end_date_str, "%Y-%m-%d")
@@ -157,14 +165,21 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
                 zip_file.extract(local_filename, download_folder)
                 write(f"Extracted {local_filename}.")
+                num_files_success += 1
             else:
                 write(f"File not found or error {response.status_code} for URL: {file_url}")
+                num_files_error += 1
         except Exception as e:
             write(f"Error extracting {local_filename}: {e}")
+            num_files_error += 1
         
         current += datetime.timedelta(minutes=15)
     
     write(f"Patching files from {start_date_str} to {end_date_str} completed.")
+    msg = f'''Number of files ingested: {num_files_success}
+Number of file errors: {num_files_error}
+Ingestion status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% success'''
+    write(msg)
     return jsonify({"message": f"Patching files from {start_date_str} to {end_date_str} completed."})
 
 def write_to_json():
