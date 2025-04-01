@@ -192,18 +192,7 @@
             start_date: startDate,
             end_date: endDate
           },
-          success: function (response) {
-            let fileListHtml = '<h5>Available Files:</h5><ul class="list-group">';
-            response.files.forEach(function (file) {
-              fileListHtml += `
-                <li class="list-group-item">
-                  <input type="checkbox" name="selected_files" value="${file}"> ${file}
-                </li>`;
-            });
-            fileListHtml += '</ul>';
-            $('#fileList').html(fileListHtml);
-            $('#ingestBtn').show(); // Show the confirm button
-          },
+          
           error: function () {
             alert('Failed to retrieve archive files.');
           }
@@ -298,15 +287,8 @@
           contentType: 'application/json',
           data: JSON.stringify({ files: selectedFiles }),
           dataType: 'json',
-          success: function(response) {
-            var summary = "<h5>Ingestion Summary:</h5>";
-            summary += "<p>Files ingested: " + response.files_ingested + "</p>";
-            summary += "<p>Errors: " + response.errors + "</p>";
-            summary += "<p>Status: " + response.status + "</p>";
-            $("#ingestSummary").html(summary);
-          }
+          })
         });
-      });
     </script>
     
     <!-- Optional Bootstrap JS -->
