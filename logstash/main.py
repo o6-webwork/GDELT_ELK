@@ -349,9 +349,7 @@ def json_convert():
     '''
     while True:
         process_downloaded_files()
-        write("\n", LOG_FILE)
-        write("\n", SCRAPING_LOG_FILE)
-        write("\n", INGESTION_LOG_FILE)  
+        sleep(2)
 
 ############################################# Main #############################################
 if __name__ == "__main__":
