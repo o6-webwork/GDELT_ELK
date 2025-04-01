@@ -27,12 +27,12 @@
       }
       /* Scraping and Ingestion log container styling */ 
       .log-container {
-        background: #f8f8f8;
-        border: 1px solid #ccc;
-        padding: 15px;
-        font-family: monospace;
-        height: 300px;
-        white-space: pre-wrap;
+      background: #f8f8f8;
+      border: 1px solid #ccc;
+      padding: 15px;
+      font-family: monospace;
+      height: 300px;
+      white-space: pre-wrap;
       }
     </style>
   </head>
@@ -51,14 +51,9 @@
               <div>
                 Scraping again in: <span id="remaining">Loading...</span>
               </div>
-              <button class="btn btn-sm btn-link" type="button" data-toggle="collapse" data-target="#scrapingLogCollapse" aria-expanded="true" aria-controls="scrapingLogCollapse">
-                Toggle Logs
-              </button>
             </div>
-            <div id="scrapingLogCollapse" class="collapse show">
-              <div class="card-body">
-                <div id="scrapingLog" class="log-container"></div>
-              </div>
+            <div class="card-body">
+              <div id="scrapingLog" class="log-container"></div>
             </div>
           </div>
         </div>
@@ -66,25 +61,16 @@
         <!-- Ingestion Pipeline Panel -->
         <div class="col-md-6 mb-3">
           <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <div>
-                Ingestion Pipeline
-                <span id="ingestionIndicator" class="status-indicator bg-secondary ml-2"></span>
-              </div>
-              <button class="btn btn-sm btn-link" type="button" data-toggle="collapse" data-target="#ingestionLogCollapse" aria-expanded="true" aria-controls="ingestionLogCollapse">
-                Toggle Logs
-              </button>
+            <div class="card-header">
+              Ingestion Pipeline
+              <span id="ingestionIndicator" class="status-indicator bg-secondary ml-2"></span>
             </div>
-            <div id="ingestionLogCollapse" class="collapse show">
-              <div class="card-body">
-                <div id="ingestionLog" class="log-container"></div>
-              </div>
+            <div class="card-body">
+              <div id="ingestionLog" class="log-container"></div>
             </div>
           </div>
         </div>
       </div>
-      
-      <!-- Patching Files Section -->
       <div class="container mt-4">
         <div class="row">
           <div class="col-md-12">
@@ -92,9 +78,12 @@
               <div class="card-header">Patching Files</div>
               <div class="card-body">
                 <form id="patchForm">
+                  <!-- Use a row with .form-row or .row and align items at the bottom -->
                   <div class="form-row align-items-end">
+                    <!-- Label + Input in a .col-auto so it takes up minimal space -->
                     <div class="col-auto">
                       <label for="lookBackDays">Look Back Period (days):</label>
+                      <!-- Limit the width with inline CSS or a custom class -->
                       <input type="number" 
                              id="lookBackDays" 
                              name="look_back_days" 
@@ -103,6 +92,7 @@
                              min="1" 
                              style="width:400px;">
                     </div>
+                    <!-- Button in its own .col-auto so it sits on the same line -->
                     <div class="col-auto">
                       <button type="submit" class="btn btn-primary">Start Patching</button>
                     </div>
@@ -115,62 +105,56 @@
         </div>
       </div>
       
-      <!-- Targeted Archival Ingestion Section -->
-      <div class="container mt-4">
-        <div class="row">
-          <div class="col-md-12">
-            <div class="card">
-              <div class="card-header">Targeted Archival Ingestion</div>
-              <div class="card-body">
-                <form id="archiveForm">
-                  <div class="form-row">
-                    <div class="col-md-4 mb-3">
-                      <label for="startDate">Start Date:</label>
-                      <input type="date" class="form-control" id="startDate" name="start_date" required>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                      <label for="endDate">End Date:</label>
-                      <input type="date" class="form-control" id="endDate" name="end_date" required>
-                    </div>
-                    <div class="col-md-4 mb-3 align-self-end">
-                      <button type="button" id="getFilesBtn" class="btn btn-primary">Get Archive Files</button>
-                    </div>
-                  </div>
-                </form>
-                <div id="fileList" class="mt-3"></div>
-                <button type="button" id="ingestBtn" class="btn btn-success mt-3" style="display: none;">Confirm Ingestion</button>
-                <div id="ingestSummary" class="mt-3"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Process Logs Panel -->
-      <div class="row mt-4">
+    <!-- Targeted Archival Ingestion Section -->
+    <div class="container mt-4">
+      <div class="row">
         <div class="col-md-12">
           <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <div>Process Logs</div>
-              <button class="btn btn-sm btn-link" type="button" data-toggle="collapse" data-target="#logPanelCollapse" aria-expanded="true" aria-controls="logPanelCollapse">
-                Toggle Logs
-              </button>
-            </div>
-            <div id="logPanelCollapse" class="collapse show">
-              <div class="card-body">
-                <pre id="logPanel" class="log-panel"></pre>
-              </div>
+            <div class="card-header">Targeted Archival Ingestion</div>
+            <div class="card-body">
+              <!-- Custom Date Range Selection -->
+              <form id="archiveForm">
+                <div class="form-row">
+                  <div class="col-md-4 mb-3">
+                    <label for="startDate">Start Date:</label>
+                    <input type="date" class="form-control" id="startDate" name="start_date" required>
+                  </div>
+                  <div class="col-md-4 mb-3">
+                    <label for="endDate">End Date:</label>
+                    <input type="date" class="form-control" id="endDate" name="end_date" required>
+                  </div>
+                  <div class="col-md-4 mb-3 align-self-end">
+                    <button type="button" id="getFilesBtn" class="btn btn-primary">Get Archive Files</button>
+                  </div>
+                </div>
+              </form>
+              <!-- List of Available Files for Selection -->
+              <div id="fileList" class="mt-3"></div>
+              <!-- Button to confirm ingestion -->
+              <button type="button" id="ingestBtn" class="btn btn-success mt-3" style="display: none;">Confirm Ingestion</button>
+              <!-- Completion Summary -->
+              <div id="ingestSummary" class="mt-3"></div>
             </div>
           </div>
         </div>
       </div>
-      
+    </div>
+
+    <!-- Log Panel -->
+
+    <div class="row mt-4">
+      <div class="col-md-12">
+        <div class="card">
+          <div class="card-header">Process Logs</div>
+          <div class="card-body">
+            <pre id="logPanel" class="log-panel"></pre>
+          </div>
+          </div>
+      </div>
+      </div>
     </div>
     
     <script>
-      // Global variable to keep track of the previous ingestion status
-      var prevIngestionStatus = null;
-      
       // Poll the /remaining endpoint every second to update the countdown.
       function updateRemaining() {
         $.getJSON('/remaining', function(data) {
@@ -192,20 +176,14 @@
             $('#scrapingIndicator').removeClass().addClass('status-indicator bg-secondary ml-2');
           }
           
-          // Update ingestion indicator and send alert if ingestion has completed
+          // Update ingestion indicator
           if (data.ingestion === 'running') {
             $('#ingestionIndicator').removeClass().addClass('status-indicator bg-success ml-2');
           } else if (data.ingestion === 'error') {
             $('#ingestionIndicator').removeClass().addClass('status-indicator bg-danger ml-2');
-          } else if (data.ingestion === 'completed') {
-            $('#ingestionIndicator').removeClass().addClass('status-indicator bg-secondary ml-2');
-            if (prevIngestionStatus === 'running') {
-              alert("Ingestion process has been completed!");
-            }
           } else {
             $('#ingestionIndicator').removeClass().addClass('status-indicator bg-secondary ml-2');
           }
-          prevIngestionStatus = data.ingestion;
         });
       }
       
@@ -213,30 +191,32 @@
       setInterval(updateStatus, 1000);
       
       function updateScrapingLogs() {
-        $.getJSON('/scraping_logs', function(data) {
-          $('#scrapingLog').text(data.lines.join(""));
-        });
-      }
-      
-      // Function to update ingestion logs
-      function updateIngestionLogs() {
-        $.getJSON('/ingestion_logs', function(data) {
-          $('#ingestionLog').text(data.lines.join(""));
-        });
-      }
+      $.getJSON('/scraping_logs', function(data) {
+        $('#scrapingLog').text(data.lines.join(""));
+      });
+    }
+    
+    // Function to update ingestion logs
+    function updateIngestionLogs() {
+      $.getJSON('/ingestion_logs', function(data) {
+        $('#ingestionLog').text(data.lines.join(""));
+      });
+    }
       setInterval(updateScrapingLogs, 2000);
       setInterval(updateIngestionLogs, 2000);
       updateScrapingLogs();
       updateIngestionLogs();
-      
+
+
       function updateLogs() {
         $.get('/logs', function(data) {
           $('#logPanel').text(data);
+          $logContainer.scrollTop($logContainer[0].scrollHeight);
         });
       }
+
       setInterval(updateLogs, 2000);
-      updateLogs();
-      
+    
       // Handle patch form submission to trigger the patching function
       $('#patchForm').submit(function(e) {
         e.preventDefault();
@@ -245,7 +225,10 @@
           $('#patchStatus').text(response.message);
         });
       });
-      
+
+      // Updates the logs as soon as webpage loads
+      updateLogs();
+    
       // Function to trigger ingestion of selected files
       $("#ingestBtn").click(function() {
         var selectedFiles = [];
