@@ -122,8 +122,8 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
         current += datetime.timedelta(minutes=15)
     write(f"Patching files from {look_back_days} days ago completed.")
     msg = f'''Number of files ingested: {num_files_success}
-    Number of file errors: {num_files_error}
-    Ingestion status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% success'''
+Number of file errors: {num_files_error}
+Ingestion status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% success'''
     write(msg)
     # Note: Returning a JSON response here isn’t used when running in a background thread.
     return jsonify({"message": f"Patching files from {look_back_days} days ago completed."})

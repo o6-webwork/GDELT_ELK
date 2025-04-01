@@ -26,6 +26,9 @@ TIMESTAMP_LOG_FILE = "./logs/timestamp_log.txt"
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
 
+with open(LOG_FILE, "w") as f:
+    f.write()
+
 def write(content, file):
     '''
     Logs messages to a text file, keeping only the first 500 lines of log text.
@@ -343,9 +346,7 @@ def json_convert():
     '''
     while True:
         process_downloaded_files()
-        write("\n", LOG_FILE)
-        write("\n", SCRAPING_LOG_FILE)
-        write("\n", INGESTION_LOG_FILE)  
+        sleep(2)  
 
 ############################################# Main #############################################
 if __name__ == "__main__":
