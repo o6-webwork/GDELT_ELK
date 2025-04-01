@@ -293,7 +293,7 @@
           return;
         }
         $.ajax({
-          url: '/ingest_archive_files',
+          url: '/get_archive_files',
           type: 'POST',
           contentType: 'application/json',
           data: JSON.stringify({ files: selectedFiles }),
