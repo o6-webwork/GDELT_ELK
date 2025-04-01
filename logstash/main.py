@@ -84,6 +84,7 @@ def download_and_extract(url):
             zip_file.extract(file, DOWNLOAD_FOLDER)
             write(f"Extraction completed: {file_name}", LOG_FILE)
             write(f"Extraction completed: {file_name}",SCRAPING_LOG_FILE)
+            write(current_time, TIMESTAMP_LOG_FILE)
 
 def run_pipeline(raw_file, json_output):
     """
