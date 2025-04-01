@@ -27,7 +27,7 @@ os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
 
 with open(LOG_FILE, "w") as f:
-    f.write()
+    f.write("")
 
 def write(content, file):
     '''
