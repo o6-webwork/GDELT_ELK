@@ -66,7 +66,7 @@ def get_remaining_time():
             last_run_dt = datetime.datetime.strptime(last_timestamp, "%Y-%m-%d %H:%M:%S")
             # Calculate the next scheduled run time
             next_run_dt = last_run_dt + datetime.timedelta(seconds=INTERVAL)
-            now_dt = datetime.datetime.now()
+            now_dt =  datetime.datetime.now() + datetime.timedelta(hours=8)
             
             # Calculate remaining seconds (ensure it's not negative)
             remaining_seconds = max(0, int((next_run_dt - now_dt).total_seconds()))
