@@ -13,7 +13,7 @@ from etl.parse_gkg import gkg_parser
 from pyspark.sql.functions import col, concat_ws
 import glob
 import shutil
-import time, datetime
+import time, datetime, pytz
 
 #Get download file link from web
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
@@ -26,12 +26,13 @@ TIMESTAMP_LOG_FILE = "./logs/timestamp_log.txt"
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
 
-current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+": "
-
 def write(content, file):
     '''
     Logs messages to a text file, keeping only the first 500 lines of log text.
     '''
+    timezone = pytz.timezone("Asia/Singapore")  # or "Asia/Shanghai", "Asia/Manila", etc.
+    current_time_gmt8 = datetime.datetime.now(timezone)
+    current_time = current_time_gmt8.strftime("%Y-%m-%d %H:%M:%S") + ": "
     try:
         with open(file, "r", encoding="utf-8") as f:
             messages = f.readlines()

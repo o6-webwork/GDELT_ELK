@@ -1,12 +1,11 @@
 import os
 import datetime
 import requests
-import logging
-import time
 import zipfile
 from io import BytesIO
 from flask import Flask, render_template, jsonify, request
 import threading
+import pytz
 
 app = Flask(__name__)
 
@@ -30,7 +29,9 @@ def write(content):
     Write log data into the log file.
     Note: This uses a static timestamp; consider updating to get the current time each call.
     """
-    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ": "
+    timezone = pytz.timezone("Asia/Singapore")  # or "Asia/Shanghai", "Asia/Manila", etc.
+    current_time_gmt8 = datetime.datetime.now(timezone)
+    current_time = current_time_gmt8.strftime("%Y-%m-%d %H:%M:%S") + ": "
     with open(log_file, "r") as f:
         lines = f.readlines()
 
