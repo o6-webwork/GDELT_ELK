@@ -22,6 +22,7 @@ LOG_FILE = "./logs/log.txt"
 SCRAPING_LOG_FILE = "./logs/scraping_log.txt"
 INGESTION_LOG_FILE = "./logs/ingestion_log.txt"
 TIMESTAMP_LOG_FILE = "./logs/timestamp_log.txt"
+JSON_LOG_FILE = "./logs/json_log.txt"
 
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
@@ -234,7 +235,7 @@ def run_pipeline(raw_file, json_output):
 
     # Reduce to a single partition so that we get one output file.
     df_transformed.coalesce(1).write.mode("overwrite").json(json_output)
-    print(f"Pipeline completed. Single JSON output written to {json_output}")
+    write(f"Pipeline completed. Single JSON output written to {json_output}", JSON_LOG_FILE)
 
     # Locates a JSON output file
     json_part_file = glob.glob(os.path.join(json_output, "part-00000-*.json"))[0]
@@ -269,14 +270,16 @@ def process_downloaded_files():
             raw_file_path = os.path.join(src_path, file)
             # Create the JSON output path by replacing .csv with .json
             json_output_path = raw_file_path.replace(".csv", ".json")
+            
+            run_pipeline(raw_file_path, json_output_path)
             write(f"Processing file: {file}", LOG_FILE)
             write(f"Processing file: {file}", INGESTION_LOG_FILE)
-            run_pipeline(raw_file_path, json_output_path)
+            write(f"Processing file: {file}", JSON_LOG_FILE)
             
             # Remove the CSV file using its full path
             os.remove(raw_file_path)
 
-    age_threshold = 24 * 60 * 60
+    age_threshold = 12 * 60 * 60
     current_time = time.time()
 
     # Cleaning JSON folders
@@ -292,6 +295,8 @@ def process_downloaded_files():
                 # Deletes file if it is older than 24 hours
                 if (current_time - file_mod_time) > age_threshold:
                     write(f"Deleting: {file_path}", LOG_FILE)
+                    write(f"Deleting: {file_path}", INGESTION_LOG_FILE)
+                    write(f"Deleting: {file_path}", JSON_LOG_FILE)
                     os.remove(file_path)
 
     # Cleaning processed files
@@ -311,9 +316,9 @@ def move_json_to_ingest(file_path):
         # Get the filename from the full path and copy to the target directory
         target_path = os.path.join(logstash_path, os.path.basename(file_path))
         shutil.move(file_path, target_path)
-        print(f"Copied {file_path} to {target_path}")
+        write(f"Copied {file_path} to {target_path}",JSON_LOG_FILE)
     else:
-        print(f"Invalid file: {file_path} (Not a .json file or file doesn't exist)")
+        write(f"Invalid file: {file_path} (Not a .json file or file doesn't exist)",JSON_LOG_FILE)
 
 def server_scrape():
     '''
