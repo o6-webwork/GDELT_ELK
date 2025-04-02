@@ -260,27 +260,31 @@ def process_downloaded_files():
     # List only the filenames in the CSV folder
     files = os.listdir(src_path)
 
-    for file in files:
-        if file.endswith(".csv"):
-            # Build the full path to the file
-            raw_file_path = os.path.join(src_path, file)
-            # Create the JSON output path by replacing .csv with .json
-            json_output_path = raw_file_path.replace(".csv", ".json")
-            
-            run_pipeline(raw_file_path, json_output_path)
-            write(f"Processing file: {file}", LOG_FILE)
-            write(f"Processing file: {file}", INGESTION_LOG_FILE)
-            write(f"Processing file: {file}", JSON_LOG_FILE)
-            
-            # Remove the CSV file using its full path
-            os.remove(raw_file_path)
-            write("Deleted {}.".format(raw_file_path), JSON_LOG_FILE)
+    while True:
+        for file in files:
+            if file.endswith(".csv"):
+                # Build the full path to the file
+                raw_file_path = os.path.join(src_path, file)
+                # Create the JSON output path by replacing .csv with .json
+                json_output_path = raw_file_path.replace(".csv", ".json")
+                
+                write(f"Processing file: {file}", LOG_FILE)
+                write(f"Processing file: {file}", INGESTION_LOG_FILE)
+                write(f"Processing file: {file}", JSON_LOG_FILE)
+                run_pipeline(raw_file_path, json_output_path)
+                
+                # Remove the CSV file using its full path
+                write(f"Processed file: {file}", LOG_FILE)
+                write(f"Processed file: {file}", INGESTION_LOG_FILE)
+                write(f"Processed file: {file}", JSON_LOG_FILE)
+                os.remove(raw_file_path)
+                write("Deleted {}.".format(raw_file_path), JSON_LOG_FILE)
 
-            # Cleaning the corresponding JSON folder
-            json_folder = file.split(".")[0] + ".gkg.json"
-            json_folder_full = os.path.join(src_path, json_folder)
-            shutil.rmtree(json_folder_full)
-            write("Deleted {}.".format(json_folder), JSON_LOG_FILE)
+                # Cleaning the corresponding JSON folder
+                json_folder = file.split(".")[0] + ".gkg.json"
+                json_folder_full = os.path.join(src_path, json_folder)
+                shutil.rmtree(json_folder_full)
+                write("Deleted {}.".format(json_folder), JSON_LOG_FILE)
 
 def move_json_to_ingest(file_path):
     '''
@@ -348,18 +352,10 @@ def server_scrape():
             write(f"Error: {url} cannot be successfully downloaded!",LOG_FILE)
             write(f"Error: {url} cannot be successfully downloaded!",SCRAPING_LOG_FILE)
 
-def json_convert():
-    '''
-    Checks for new CSV files, converts the data to JSON format every 2 sec.
-    Deletes CSV files once converted into JSON files.
-    '''
-    while True:
-        process_downloaded_files()
-
 ############################################# Main ############################################
 if __name__ == "__main__":
     thread1 = threading.Thread(target=server_scrape, daemon=True)
-    thread2 = threading.Thread(target=json_convert, daemon=True)
+    thread2 = threading.Thread(target=process_downloaded_files, daemon=True)
     thread3 = threading.Thread(target=delete_old_json, daemon=True)
     
     thread1.start()
