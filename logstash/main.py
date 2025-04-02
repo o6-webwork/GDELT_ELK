@@ -264,6 +264,9 @@ def process_downloaded_files():
     # List only the filenames in the CSV folder
     files = os.listdir(src_path)
 
+    # Deletes old files / folders past 7 days
+    delete_old_json(src_path)
+
     for file in files:
         if file.endswith(".csv"):
             # Build the full path to the file
@@ -278,30 +281,13 @@ def process_downloaded_files():
             
             # Remove the CSV file using its full path
             os.remove(raw_file_path)
+            write("Deleted {}.".format(raw_file_path), JSON_LOG_FILE)
 
-    age_threshold = 12 * 60 * 60
-    current_time = time.time()
-
-    # Cleaning JSON folders
-    directory = "./logstash_ingest_data/json"
-    for filename in os.listdir(directory):
-        file_path = os.path.join(directory, filename)
-
-        # Check if it's a file
-        if os.path.isfile(file_path) and file_path.endswith(".json"):
-                # Get the last modification time
-                file_mod_time = os.path.getmtime(file_path)
-
-                # Deletes file if it is older than 24 hours
-                if (current_time - file_mod_time) > age_threshold:
-                    write(f"Deleting: {file_path}", LOG_FILE)
-                    write(f"Deleting: {file_path}", INGESTION_LOG_FILE)
-                    write(f"Deleting: {file_path}", JSON_LOG_FILE)
-                    os.remove(file_path)
-
-    # Cleaning processed files
-    for folder_path in os.listdir(src_path):
-        if ".gkg.json" in folder_path: shutil.rmtree(os.path.join(src_path, folder_path))
+            # Cleaning the corresponding JSON folder
+            json_folder = file.split(".")[0] + ".gkg.json"
+            json_folder_full = os.path.join(src_path, json_folder)
+            shutil.rmtree(json_folder_full)
+            write("Deleted {}.".format(json_folder), JSON_LOG_FILE)
 
 def move_json_to_ingest(file_path):
     '''
@@ -319,6 +305,28 @@ def move_json_to_ingest(file_path):
         write(f"Copied {file_path} to {target_path}",JSON_LOG_FILE)
     else:
         write(f"Invalid file: {file_path} (Not a .json file or file doesn't exist)",JSON_LOG_FILE)
+
+def delete_old_json(directory="./logstash_ingest_data/json"):
+    while True:
+        # 1 week's leeway
+        age_threshold = 24 * 60 * 60 * 7
+        current_time = time.time()
+
+        # Cleaning JSON folders
+        for filename in os.listdir(directory):
+            file_path = os.path.join(directory, filename)
+
+            # Check if it's a file
+            if file_path.endswith(".json") or file_path.endswith(".csv"):
+                    # Get the last modification time
+                    file_mod_time = os.path.getmtime(file_path)
+
+                    # Deletes file if it is older than 24 hours
+                    if (current_time - file_mod_time) > age_threshold:
+                        write(f"Deleting: {file_path}", LOG_FILE)
+                        write(f"Deleting: {file_path}", INGESTION_LOG_FILE)
+                        write(f"Deleting: {file_path}", JSON_LOG_FILE)
+                        os.remove(file_path)
 
 def server_scrape():
     '''
@@ -355,12 +363,15 @@ def json_convert():
     while True:
         process_downloaded_files()
 
-############################################# Main #############################################
+############################################# Main ############################################
 if __name__ == "__main__":
     thread1 = threading.Thread(target=server_scrape, daemon=True)
     thread2 = threading.Thread(target=json_convert, daemon=True)
+    thread3 = threading.Thread(target=delete_old_json, daemon=True)
     
     thread1.start()
     thread2.start()
+    thread3.start()
     thread1.join()
     thread2.join()
+    thread3.join()
