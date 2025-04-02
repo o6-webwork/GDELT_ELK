@@ -257,10 +257,10 @@ def process_downloaded_files():
     '''
     # Source directory for CSV files
     src_path = "./csv"
-    # List only the filenames in the CSV folder
-    files = os.listdir(src_path)
-
+    
     while True:
+        # List only the filenames in the CSV folder
+        files = os.listdir(src_path)
         for file in files:
             if file.endswith(".csv"):
                 # Build the full path to the file
@@ -283,8 +283,11 @@ def process_downloaded_files():
                 # Cleaning the corresponding JSON folder
                 json_folder = file.split(".")[0] + ".gkg.json"
                 json_folder_full = os.path.join(src_path, json_folder)
-                shutil.rmtree(json_folder_full)
-                write("Deleted {}.".format(json_folder), JSON_LOG_FILE)
+                try:
+                    shutil.rmtree(json_folder_full)
+                    write("Deleted {}.".format(json_folder), JSON_LOG_FILE)
+                except Exception as e:
+                    write("Error deleting {}: {}".format(json_folder, str(e)), JSON_LOG_FILE)
 
 def move_json_to_ingest(file_path):
     '''
