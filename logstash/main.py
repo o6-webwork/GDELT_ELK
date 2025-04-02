@@ -291,7 +291,7 @@ def process_downloaded_files():
 
                 # Deletes file if it is older than 24 hours
                 if (current_time - file_mod_time) > age_threshold:
-                    print(f"Deleting: {file_path}")
+                    write(f"Deleting: {file_path}", LOG_FILE)
                     os.remove(file_path)
 
     # Cleaning processed files
@@ -349,7 +349,6 @@ def json_convert():
     '''
     while True:
         process_downloaded_files()
-        sleep(2)
 
 ############################################# Main #############################################
 if __name__ == "__main__":
