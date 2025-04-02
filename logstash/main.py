@@ -255,17 +255,10 @@ def process_downloaded_files():
     Process downloaded CSV files, converting them into JSON format,
     and delete the processed CSV file.
     '''
-    # Create the JSON subfolder if it does not exist.
-    logstash_path = "./logstash_ingest_data/json"
-    os.makedirs(logstash_path, exist_ok=True)
-
     # Source directory for CSV files
     src_path = "./csv"
     # List only the filenames in the CSV folder
     files = os.listdir(src_path)
-
-    # Deletes old files / folders past 7 days
-    delete_old_json(src_path)
 
     for file in files:
         if file.endswith(".csv"):
