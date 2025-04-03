@@ -109,24 +109,24 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
         timestamp = current.strftime("%Y%m%d%H%M%S")
         file_url = f"{base_url}{timestamp}.gkg.csv.zip"
         local_filename = f"{timestamp}.gkg.csv"
-        write(f"Extracting {local_filename}...")
+        write(f"Downloading patching file: {local_filename}...")
         try:
             response = requests.get(file_url, stream=True, timeout=10)
             if response.status_code == 200:
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
                 zip_file.extract(local_filename, download_folder)
                 num_files_success += 1
-                write(f"Extracted {local_filename}.")
+                write(f"Donwloaded patching file: {local_filename}.")
             else:
                 write(f"File not found or error {response.status_code} for URL: {file_url}")
         except Exception as e:
             num_files_error += 1
-            write(f"Error extracting {local_filename}: {e}")
+            write(f"Error downloading patching file {local_filename}: {e}")
         current += datetime.timedelta(minutes=15)
     write(f"Patching files from {look_back_days} days ago completed.")
-    msg = f'''Number of files ingested: {num_files_success}
-    Number of file errors: {num_files_error}
-    Ingestion status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
+    msg = f'''Number of patching files downloaded: {num_files_success}
+    Number of patching file errors: {num_files_error}
+    Download status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
     write(msg)
     # Note: Returning a JSON response here isn’t used when running in a background thread.
     return jsonify({"message": f"Patching files from {look_back_days} days ago completed."})
@@ -158,28 +158,28 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
         timestamp = current.strftime("%Y%m%d%H%M%S")
         file_url = f"{base_url}{timestamp}.gkg.csv.zip"
         local_filename = f"{timestamp}.gkg.csv"
-        write(f"Extracting {local_filename}...")
+        write(f"Downloading archive files: {local_filename}...")
         
         try:
             response = requests.get(file_url, stream=True, timeout=10)
             if response.status_code == 200:
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
                 zip_file.extract(local_filename, download_folder)
-                write(f"Extracted {local_filename}.")
+                write(f"Downloading archive files completed {local_filename}.")
                 num_files_success += 1
             else:
                 write(f"File not found or error {response.status_code} for URL: {file_url}")
                 num_files_error += 1
         except Exception as e:
-            write(f"Error extracting {local_filename}: {e}")
+            write(f"Error downloading archive files {local_filename}: {e}")
             num_files_error += 1
         
         current += datetime.timedelta(minutes=15)
     
     write(f"Patching files from {start_date_str} to {end_date_str} completed.")
-    msg = f'''Number of files ingested: {num_files_success}
-Number of file errors: {num_files_error}
-Ingestion status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
+    msg = f'''Number of archive files downloaded: {num_files_success}
+Number of archive file errors: {num_files_error}
+Download status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
     write(msg)
     return jsonify({"message": f"Patching files from {start_date_str} to {end_date_str} completed."})
 
