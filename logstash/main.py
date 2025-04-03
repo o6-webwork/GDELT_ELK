@@ -76,11 +76,11 @@ def download_and_extract(url):
     
     for file in zip_file.namelist():
         if file.lower().endswith("gkg.csv"):
-            write(f"Downloading latest file: {file}",LOG_FILE)
-            write(f"Downloading latest file: {file}",SCRAPING_LOG_FILE)
+            write(f"Downloading latest file (15 min interval): {file}",LOG_FILE)
+            write(f"Downloading latest file (15 min interval): {file}",SCRAPING_LOG_FILE)
             zip_file.extract(file, DOWNLOAD_FOLDER)
-            write(f"Downloading latest file completed: {file_name}", LOG_FILE)
-            write(f"Downloading latest file completed: {file_name}",SCRAPING_LOG_FILE)
+            write(f"Downloading latest file completed (15 min interval): {file_name}", LOG_FILE)
+            write(f"Downloading latest file completed (15 min interval): {file_name}",SCRAPING_LOG_FILE)
 
 def run_pipeline(raw_file, json_output):
     """
@@ -341,8 +341,8 @@ def server_scrape():
                 write("No CSV ZIP links found in lastupdate.txt",LOG_FILE)
                 write("No CSV ZIP links found in lastupdate.txt",SCRAPING_LOG_FILE)
             else:
-                write(f"Found {len(csv_zip_urls)} files to download...",LOG_FILE)
-                write(f"Found {len(csv_zip_urls)} files to download...",SCRAPING_LOG_FILE)
+                write(f"Found {len(csv_zip_urls)} files to download (15 min interval)...",LOG_FILE)
+                write(f"Found {len(csv_zip_urls)} files to download (15 min interval)...",SCRAPING_LOG_FILE)
                 for url in csv_zip_urls:
                     download_and_extract(url)
 

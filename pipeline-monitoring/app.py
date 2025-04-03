@@ -183,13 +183,6 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
     write(msg)
     return jsonify({"message": f"Patching files from {start_date_str} to {end_date_str} completed."})
 
-def write_to_json():
-    '''
-    Writes CSV file data to a JSON file in required directory,
-    and deletes the used CSV file.
-    '''
-    pass
-
 ############################ Flask Routes ############################
 
 @app.route('/')
