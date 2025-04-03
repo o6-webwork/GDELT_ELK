@@ -184,20 +184,6 @@
           alert('Please select both start and end dates.');
           return;
         }
-
-        $.ajax({
-          url: '/get_archive_files',
-          type: 'POST',
-          data: {
-            start_date: startDate,
-            end_date: endDate
-          },
-          
-          error: function () {
-            alert('Failed to retrieve archive files.');
-          }
-        });
-
         $.ajax({
         url: '/get_archive_files',
         type: 'POST',
