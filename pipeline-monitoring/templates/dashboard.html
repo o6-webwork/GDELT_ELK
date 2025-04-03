@@ -197,7 +197,49 @@
             alert('Failed to retrieve archive files.');
           }
         });
+
+        $.ajax({
+        url: '/get_archive_files',
+        type: 'POST',
+        data: {
+          start_date: startDate,
+          end_date: endDate
+        },
+        error: function (xhr, status, error) {
+          let errorMessage = 'Failed to retrieve archive files. ';
+          
+          // Check for no response (bad internet connection)
+          if (xhr.status === 0) {
+            errorMessage += 'It seems there is a problem with your internet connection. Please check your network.';
+          } 
+          // Check for server errors
+          else if (xhr.status >= 500) {
+            errorMessage += 'The server encountered an error. Please try again later.';
+          } 
+          // Check for client errors or invalid scraping responses
+          else if (xhr.status >= 400) {
+            // Optionally, try to parse any JSON error message sent back by the server.
+            let responseText = xhr.responseText;
+            try {
+              let jsonResponse = JSON.parse(responseText);
+              if (jsonResponse.error) {
+                errorMessage += jsonResponse.error;
+              } else {
+                errorMessage += xhr.status + ': ' + xhr.statusText;
+              }
+            } catch (e) {
+              errorMessage += xhr.status + ': ' + xhr.statusText;
+            }
+          } 
+          else {
+            errorMessage += 'Error: ' + error;
+          } 
+          alert(errorMessage);
+        }
       });
+      });
+
+      
 
       
       // Function to poll the /status endpoint and update the indicators
