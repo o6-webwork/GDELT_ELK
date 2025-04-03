@@ -116,7 +116,7 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
                 zip_file.extract(local_filename, download_folder)
                 num_files_success += 1
-                write(f"Donwloaded patching file: {local_filename}.")
+                write(f"Donwloadiong patching file completed: {local_filename}.")
             else:
                 write(f"File not found or error {response.status_code} for URL: {file_url}")
         except Exception as e:
@@ -165,7 +165,7 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
             if response.status_code == 200:
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
                 zip_file.extract(local_filename, download_folder)
-                write(f"Downloading archive files completed {local_filename}.")
+                write(f"Downloading archive files completed: {local_filename}.")
                 num_files_success += 1
             else:
                 write(f"File not found or error {response.status_code} for URL: {file_url}")
