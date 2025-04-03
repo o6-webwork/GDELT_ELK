@@ -76,11 +76,11 @@ def download_and_extract(url):
     
     for file in zip_file.namelist():
         if file.lower().endswith("gkg.csv"):
-            write(f"Extracting: {file}",LOG_FILE)
-            write(f"Extracting: {file}",SCRAPING_LOG_FILE)
+            write(f"Downloading latest file: {file}",LOG_FILE)
+            write(f"Downloading latest file: {file}",SCRAPING_LOG_FILE)
             zip_file.extract(file, DOWNLOAD_FOLDER)
-            write(f"Extraction completed: {file_name}", LOG_FILE)
-            write(f"Extraction completed: {file_name}",SCRAPING_LOG_FILE)
+            write(f"Downloading latest file completed: {file_name}", LOG_FILE)
+            write(f"Downloading latest file completed: {file_name}",SCRAPING_LOG_FILE)
 
 def run_pipeline(raw_file, json_output):
     """
@@ -268,15 +268,15 @@ def process_downloaded_files():
                 # Create the JSON output path by replacing .csv with .json
                 json_output_path = raw_file_path.replace(".csv", ".json")
                 
-                write(f"Processing file: {file}", LOG_FILE)
-                write(f"Processing file: {file}", INGESTION_LOG_FILE)
-                write(f"Processing file: {file}", JSON_LOG_FILE)
+                write(f"Processing file into JSON: {file}", LOG_FILE)
+                write(f"Processing file into JSON: {file}", INGESTION_LOG_FILE)
+                write(f"Processing file into JSON: {file}", JSON_LOG_FILE)
                 run_pipeline(raw_file_path, json_output_path)
                 
                 # Remove the CSV file using its full path
-                write(f"Processed file: {file}", LOG_FILE)
-                write(f"Processed file: {file}", INGESTION_LOG_FILE)
-                write(f"Processed file: {file}", JSON_LOG_FILE)
+                write(f"Processing file into JSON completed: {file}", LOG_FILE)
+                write(f"Processing file into JSON completed: {file}", INGESTION_LOG_FILE)
+                write(f"Processing file into JSON completed: {file}", JSON_LOG_FILE)
                 os.remove(raw_file_path)
                 write("Deleted {}.".format(raw_file_path), JSON_LOG_FILE)
 
