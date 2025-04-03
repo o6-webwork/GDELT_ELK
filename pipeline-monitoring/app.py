@@ -116,7 +116,7 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
                 zip_file.extract(local_filename, download_folder)
                 num_files_success += 1
-                write(f"Donwloadiong patching file completed: {local_filename}.")
+                write(f"Downloading patching file completed: {local_filename}.")
             else:
                 write(f"File not found or error {response.status_code} for URL: {file_url}")
         except Exception as e:
