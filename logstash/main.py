@@ -27,6 +27,7 @@ JSON_LOG_FILE = "./logs/json_log.txt"
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
 
+# Cleans the logs at the start of every session.
 with open(LOG_FILE, "w") as f:
     f.write("")
 
@@ -43,6 +44,12 @@ def write(content, file):
     with open(file, "a", encoding="utf-8") as f:
         f.write(current_time + content + "\n")
 
+def write_all(msg, file_list = [LOG_FILE, INGESTION_LOG_FILE, JSON_LOG_FILE]):
+    '''
+    Writes the message to all 3 log files in logstash.
+    '''
+    for FILE in file_list: write(msg, FILE)
+
 def get_latest_gdelt_links():
     """
     Fetches the latest update file and extracts the download URLs.
@@ -51,7 +58,7 @@ def get_latest_gdelt_links():
     response = requests.get(LAST_UPDATE_URL)
     
     if response.status_code != 200:
-        write("Failed to fetch lastupdate.txt",LOG_FILE)
+        write("Extraction failure: failed to fetch lastupdate.txt", LOG_FILE)
         return []
     
     lines = response.text.strip().split("\n")
@@ -64,23 +71,19 @@ def download_and_extract(url):
     Downloads a ZIP file from the given URL and extracts CSV files.
     :param url: The URL to fetch the zip files from
     """
-    file_name = url.split("/")[-1]
     response = requests.get(url, stream=True)
     
     if response.status_code != 200:
-        write(f"Failed to get {url}",LOG_FILE)
-        write(f"Failed to get {url}",SCRAPING_LOG_FILE)
+        write_all(f"Extraction failure: {url}", [LOG_FILE, SCRAPING_LOG_FILE])
         return
     
     zip_file = zipfile.ZipFile(BytesIO(response.content))
     
     for file in zip_file.namelist():
         if file.lower().endswith("gkg.csv"):
-            write(f"Extracting latest file (15 min interval): {file}",LOG_FILE)
-            write(f"Extracting latest file (15 min interval): {file}",SCRAPING_LOG_FILE)
+            write_all(f"Extracting latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
             zip_file.extract(file, DOWNLOAD_FOLDER)
-            write(f"Extracting latest file completed (15 min interval): {file_name}", LOG_FILE)
-            write(f"Extracting latest file completed (15 min interval): {file_name}",SCRAPING_LOG_FILE)
+            write_all(f"Extracted latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
 
 def run_pipeline(raw_file, json_output):
     """
@@ -268,26 +271,22 @@ def process_downloaded_files():
                 # Create the JSON output path by replacing .csv with .json
                 json_output_path = raw_file_path.replace(".csv", ".json")
                 
-                write(f"Transforming file into JSON: {file}", LOG_FILE)
-                write(f"Transforming file into JSON: {file}", INGESTION_LOG_FILE)
-                write(f"Transforming file into JSON: {file}", JSON_LOG_FILE)
+                write_all(f"Transforming file: {file}")
                 run_pipeline(raw_file_path, json_output_path)
                 
                 # Remove the CSV file using its full path
-                write(f"Transforming file into JSON completed: {file}", LOG_FILE)
-                write(f"Transforming file into JSON completed: {file}", INGESTION_LOG_FILE)
-                write(f"Transforming file into JSON completed: {file}", JSON_LOG_FILE)
+                write_all(f"Transformed file: {file}")
                 os.remove(raw_file_path)
-                write("Deleted {}.".format(raw_file_path), JSON_LOG_FILE)
+                write(f"Deleted processed CSV file: {raw_file_path}", JSON_LOG_FILE)
 
                 # Cleaning the corresponding JSON folder
                 json_folder = file.split(".")[0] + ".gkg.json"
                 json_folder_full = os.path.join(src_path, json_folder)
                 try:
                     shutil.rmtree(json_folder_full)
-                    write("Deleted {}.".format(json_folder), JSON_LOG_FILE)
+                    write(f"Deleted processed Spark folder: {json_folder}", JSON_LOG_FILE)
                 except Exception as e:
-                    write("Error deleting {}: {}".format(json_folder, str(e)), JSON_LOG_FILE)
+                    write(f"Error deleting Spark folder {json_folder}: {e}", JSON_LOG_FILE)
 
 def move_json_to_ingest(file_path):
     '''
@@ -304,7 +303,7 @@ def move_json_to_ingest(file_path):
         shutil.move(file_path, target_path)
         write(f"Copied {file_path} to {target_path}",JSON_LOG_FILE)
     else:
-        write(f"Invalid file: {file_path} (Not a .json file or file doesn't exist)",JSON_LOG_FILE)
+        write(f"Invalid file: {file_path} (Not a JSON file or file doesn't exist)",JSON_LOG_FILE)
 
 def delete_old_json(directory="./logstash_ingest_data/json"):
     while True:
@@ -323,9 +322,7 @@ def delete_old_json(directory="./logstash_ingest_data/json"):
 
                     # Deletes file if it is older than 24 hours
                     if (current_time - file_mod_time) > age_threshold:
-                        write(f"Deleting: {file_path}", LOG_FILE)
-                        write(f"Deleting: {file_path}", INGESTION_LOG_FILE)
-                        write(f"Deleting: {file_path}", JSON_LOG_FILE)
+                        write_all(f"Deleting: {file_path}")
                         os.remove(file_path)
 
 def server_scrape():
@@ -333,16 +330,15 @@ def server_scrape():
     Scrapes data off the GDELT server,
     and downloads the resultant CSV files every 15 minutes.
     '''
+    file_list = [LOG_FILE, SCRAPING_LOG_FILE]
     while True:
         try:
             csv_zip_urls = get_latest_gdelt_links()
 
             if not csv_zip_urls:
-                write("No CSV ZIP links found in lastupdate.txt",LOG_FILE)
-                write("No CSV ZIP links found in lastupdate.txt",SCRAPING_LOG_FILE)
+                write_all("No CSV ZIP links found in lastupdate.txt", file_list)
             else:
-                write(f"Found {len(csv_zip_urls)} files to extract (15 min interval)...",LOG_FILE)
-                write(f"Found {len(csv_zip_urls)} files to extract (15 min interval)...",SCRAPING_LOG_FILE)
+                write_all(f"Found {len(csv_zip_urls)} files to download (15 min interval)...", file_list)
                 for url in csv_zip_urls:
                     download_and_extract(url)
 
@@ -352,8 +348,7 @@ def server_scrape():
             sleep(15*60)     
 
         except:
-            write(f"Error: {url} cannot be successfully extracted!",LOG_FILE)
-            write(f"Error: {url} cannot be successfully extracted!",SCRAPING_LOG_FILE)
+            write_all(f"Error: {url} cannot be successfully downloaded!", file_list)
 
 ############################################# Main ############################################
 if __name__ == "__main__":

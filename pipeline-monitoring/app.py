@@ -118,18 +118,16 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
                 num_files_success += 1
                 write(f"Extracting patching file completed: {local_filename}.")
             else:
-                write(f"File not found or error {response.status_code} for URL: {file_url}")
+                write(f"Patching error {response.status_code} for URL: {file_url}")
         except Exception as e:
             num_files_error += 1
-            write(f"Error Extracting patching file {local_filename}: {e}")
+            write(f"Error extracting patching file {local_filename}: {e}")
         current += datetime.timedelta(minutes=15)
     write(f"Patching files from {look_back_days} days ago completed.")
     msg = f'''Number of patching files extracted: {num_files_success}
                     Number of patching file errors: {num_files_error}
                     Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
     write(msg)
-    # Note: Returning a JSON response here isn’t used when running in a background thread.
-    return jsonify({"message": f"Patching files from {look_back_days} days ago completed."})
 
 def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdeltproject.org/gdeltv2/"):
     """
@@ -168,7 +166,7 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
                 write(f"Extracting archive files completed: {local_filename}.")
                 num_files_success += 1
             else:
-                write(f"File not found or error {response.status_code} for URL: {file_url}")
+                write(f"Archival download error {response.status_code} for URL: {file_url}")
                 num_files_error += 1
         except Exception as e:
             write(f"Error downloExtractingading archive files {local_filename}: {e}")
@@ -181,7 +179,7 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
                     Number of archive file errors: {num_files_error}
                     Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
     write(msg)
-    return jsonify({"message": f"Patching files from {start_date_str} to {end_date_str} completed."})
+    return jsonify({"message": f"Targeted ingestion download from {start_date_str} to {end_date_str} completed."})
 
 ############################ Flask Routes ############################
 
