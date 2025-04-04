@@ -76,11 +76,11 @@ def download_and_extract(url):
     
     for file in zip_file.namelist():
         if file.lower().endswith("gkg.csv"):
-            write(f"Downloading latest file (15 min interval): {file}",LOG_FILE)
-            write(f"Downloading latest file (15 min interval): {file}",SCRAPING_LOG_FILE)
+            write(f"Extracting latest file (15 min interval): {file}",LOG_FILE)
+            write(f"Extracting latest file (15 min interval): {file}",SCRAPING_LOG_FILE)
             zip_file.extract(file, DOWNLOAD_FOLDER)
-            write(f"Downloading latest file completed (15 min interval): {file_name}", LOG_FILE)
-            write(f"Downloading latest file completed (15 min interval): {file_name}",SCRAPING_LOG_FILE)
+            write(f"Extracting latest file completed (15 min interval): {file_name}", LOG_FILE)
+            write(f"Extracting latest file completed (15 min interval): {file_name}",SCRAPING_LOG_FILE)
 
 def run_pipeline(raw_file, json_output):
     """
@@ -268,15 +268,15 @@ def process_downloaded_files():
                 # Create the JSON output path by replacing .csv with .json
                 json_output_path = raw_file_path.replace(".csv", ".json")
                 
-                write(f"Processing file into JSON: {file}", LOG_FILE)
-                write(f"Processing file into JSON: {file}", INGESTION_LOG_FILE)
-                write(f"Processing file into JSON: {file}", JSON_LOG_FILE)
+                write(f"Transforming file into JSON: {file}", LOG_FILE)
+                write(f"Transforming file into JSON: {file}", INGESTION_LOG_FILE)
+                write(f"Transforming file into JSON: {file}", JSON_LOG_FILE)
                 run_pipeline(raw_file_path, json_output_path)
                 
                 # Remove the CSV file using its full path
-                write(f"Processing file into JSON completed: {file}", LOG_FILE)
-                write(f"Processing file into JSON completed: {file}", INGESTION_LOG_FILE)
-                write(f"Processing file into JSON completed: {file}", JSON_LOG_FILE)
+                write(f"Transforming file into JSON completed: {file}", LOG_FILE)
+                write(f"Transforming file into JSON completed: {file}", INGESTION_LOG_FILE)
+                write(f"Transforming file into JSON completed: {file}", JSON_LOG_FILE)
                 os.remove(raw_file_path)
                 write("Deleted {}.".format(raw_file_path), JSON_LOG_FILE)
 
@@ -341,8 +341,8 @@ def server_scrape():
                 write("No CSV ZIP links found in lastupdate.txt",LOG_FILE)
                 write("No CSV ZIP links found in lastupdate.txt",SCRAPING_LOG_FILE)
             else:
-                write(f"Found {len(csv_zip_urls)} files to download (15 min interval)...",LOG_FILE)
-                write(f"Found {len(csv_zip_urls)} files to download (15 min interval)...",SCRAPING_LOG_FILE)
+                write(f"Found {len(csv_zip_urls)} files to extract (15 min interval)...",LOG_FILE)
+                write(f"Found {len(csv_zip_urls)} files to extract (15 min interval)...",SCRAPING_LOG_FILE)
                 for url in csv_zip_urls:
                     download_and_extract(url)
 
@@ -352,8 +352,8 @@ def server_scrape():
             sleep(15*60)     
 
         except:
-            write(f"Error: {url} cannot be successfully downloaded!",LOG_FILE)
-            write(f"Error: {url} cannot be successfully downloaded!",SCRAPING_LOG_FILE)
+            write(f"Error: {url} cannot be successfully extracted!",LOG_FILE)
+            write(f"Error: {url} cannot be successfully extracted!",SCRAPING_LOG_FILE)
 
 ############################################# Main ############################################
 if __name__ == "__main__":
