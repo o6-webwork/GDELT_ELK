@@ -1,1 +1,4 @@
 xpack.monitoring.enabled: false
+pipeline.batch.size: 50      # Number of events per batch
+pipeline.batch.delay: 50     # Delay (in milliseconds) between batches
+pipeline.workers: 1          # Number of pipeline workers
