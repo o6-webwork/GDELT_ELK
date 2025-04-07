@@ -103,7 +103,7 @@ services:
       - xpack.security.transport.ssl.certificate=certs/es01/es01.crt
       - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
       - xpack.security.transport.ssl.verification_mode=certificate
-      - ES_JAVA_OPTS=-Xms4g -Xmx4g
+      - ES_JAVA_OPTS=-Xms3g -Xmx3g
     mem_limit: ${ES_MEM_LIMIT}
     ulimits:
       memlock:
@@ -143,6 +143,7 @@ services:
       - XPACK_SECURITY_ENCRYPTIONKEY=${ENCRYPTION_KEY}
       - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${ENCRYPTION_KEY}
       - XPACK_REPORTING_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+      - KB_JAVA_OPTS=-Xms3g -Xmx3g
     mem_limit: ${KB_MEM_LIMIT}
     healthcheck:
       test:
@@ -186,7 +187,6 @@ services:
       - ELASTIC_USER=elastic
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - ELASTIC_HOSTS=https://es01:9200
-      - LS_JAVA_OPTS=-Xms4g -Xmx4g
     restart: "no"  # Ensures Logstash does not restart after exiting
     networks:
       - elastic
