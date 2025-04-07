@@ -28,8 +28,9 @@ os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
 
 # Cleans the logs at the start of every session.
-with open(LOG_FILE, "w") as f:
-    f.write("")
+for file in [LOG_FILE, SCRAPING_LOG_FILE, INGESTION_LOG_FILE, TIMESTAMP_LOG_FILE, JSON_LOG_FILE]:
+    with open(file, "w") as f:
+        f.write("")
 
 def write(content, file):
     '''
