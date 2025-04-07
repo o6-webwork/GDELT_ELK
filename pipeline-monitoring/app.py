@@ -169,7 +169,7 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
                 write(f"Archival download error {response.status_code} for URL: {file_url}")
                 num_files_error += 1
         except Exception as e:
-            write(f"Error downloExtractingading archive files {local_filename}: {e}")
+            write(f"Error extracting archive files {local_filename}: {e}")
             num_files_error += 1
         
         current += datetime.timedelta(minutes=15)

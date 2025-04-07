@@ -271,11 +271,11 @@ def process_downloaded_files():
                 # Create the JSON output path by replacing .csv with .json
                 json_output_path = raw_file_path.replace(".csv", ".json")
                 
-                write_all(f"Transforming file: {file}")
+                write_all(f"Transforming file into JSON: {file}")
                 run_pipeline(raw_file_path, json_output_path)
                 
                 # Remove the CSV file using its full path
-                write_all(f"Transformed file: {file}")
+                write_all(f"Transformed file into JSON: {file}")
                 os.remove(raw_file_path)
                 write(f"Deleted processed CSV file: {raw_file_path}", JSON_LOG_FILE)
 
