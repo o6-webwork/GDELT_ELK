@@ -7,9 +7,9 @@ volumes:
     driver: local
   kibanadata:
     driver: local
-  logstash01:
+  logstash01: # Logstash internal data volume
     driver: local
-  logdata:
+  logdata: # Shared volume for logs (ETL script, monitoring app, and now Logstash)
     driver: local
   csvfiles:
     driver: local
@@ -158,12 +158,29 @@ services:
       - elastic
     restart: always
 
-  scraper:
-    build: ./logstash
+  # Renamed 'scraper' to 'etl_processor' for clarity
+  etl_processor:
+    build: ./logstash # Assumes Dockerfile here runs main.py
     volumes:
-      - logstash01:/app/logstash_ingest_data/json
+      # Mount shared log volume for writing gdelt_etl.log
       - logdata:/app/logs
+      # Mount csvfiles volume for downloading/processing CSVs
       - csvfiles:/app/csv
+      # Mount target directory for processed JSON (read by Logstash)
+      - ./logstash/logstash_ingest_data:/app/logstash_ingest_data
+      # Mount schemas and etl code if needed directly by main.py run inside container
+      - ./logstash/schemas:/app/schemas
+      - ./logstash/etl:/app/etl
+    # Pass necessary environment variables if main.py uses them
+    # environment:
+    #   - GDELT_LOG_FOLDER=/app/logs
+    #   - GDELT_DOWNLOAD_FOLDER=/app/csv
+    #   - GDELT_JSON_INGEST_FOLDER=/app/logstash_ingest_data/json
+    networks:
+      - elastic
+    # Depends on ES only if main.py needs to connect (currently doesn't)
+    # depends_on:
+    #   - es01
 
   logstash01:
     depends_on:
@@ -171,33 +188,59 @@ services:
         condition: service_healthy
       kibana:
         condition: service_healthy
+      # Optional: depends on etl_processor if you want it to start first
+      # etl_processor:
+      #   condition: service_started # Or a more specific healthcheck if added
     image: docker.elastic.co/logstash/logstash:${STACK_VERSION}
     labels:
       co.elastic.logs/module: logstash
-    user: root
+    user: root # Ensure permissions to write logs if needed
     volumes:
       - certs:/usr/share/logstash/certs
-      - "logstash01:/usr/share/logstash/data/"
+      - "logstash01:/usr/share/logstash/data/" # Logstash internal data (e.g., sincedb)
       - "${LOGSTASH_ROOT}/pipeline/:/usr/share/logstash/pipeline/"
-      - "${LOGSTASH_ROOT}/logstash.yml:/usr/share/logstash/config/logstash.yml" 
+      - "${LOGSTASH_ROOT}/logstash.yml:/usr/share/logstash/config/logstash.yml"
       - "${LOGSTASH_ROOT}/template.json:/usr/share/logstash/template.json"
+      # Mount the directory Logstash reads JSON from
+      - ./logstash/logstash_ingest_data/json:/usr/share/logstash/ingest_json # Example path Logstash pipeline might use
+      # Mount Logstash's log directory into the shared 'logdata' volume
+      - logdata:/usr/share/logstash/logs/
     mem_limit: ${LS_MEM_LIMIT}
     environment:
       - xpack.monitoring.enabled=false
       - ELASTIC_USER=elastic
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - ELASTIC_HOSTS=https://es01:9200
-    restart: "no"  # Ensures Logstash does not restart after exiting
+      # Example: Pointing Logstash config to use mounted file explicitly
+      # - PATH_CONFIG=/usr/share/logstash/pipeline
+    restart: "no" # Keep as "no" if it's meant to run once per data batch
     networks:
       - elastic
 
   pipeline-monitoring:
     depends_on:
-      es01:
+      es01: # Depends on ES to check data existence
         condition: service_healthy
+      # Optional: depends on logstash01 if it needs Logstash to be running
+      # logstash01:
+      #   condition: service_started
     build: ./pipeline-monitoring
     volumes:
+      # Mount shared log volume to read ETL and Logstash logs
       - logdata:/app/logs
-      - csvfiles:/app/csv
+      # Mount csvfiles volume if patching downloads directly here
+      - csvfiles:/app/csv # Changed from ./csv to match etl_processor mount point name
     ports:
       - ${PIPELINE_MONITORING_PORT}:7979
+    environment:
+      # Pass necessary env vars for ES connection and log paths
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ES_HOST_FOR_APP=es01 # Service name within docker network
+      - ES_PORT=9200
+      - ES_USER=elastic
+      - ES_SCHEME=https
+      - PIPELINE_LOG_FOLDER=/app/logs # Internal path within this container
+      # Add other env vars if app.py uses them (e.g., GDELT URLs)
+    networks:
+      - elastic
+

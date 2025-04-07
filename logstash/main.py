@@ -5,360 +5,358 @@ import zipfile
 from io import BytesIO
 from time import sleep
 import sys
-import os
-from pyspark.sql.functions import col, struct, array_distinct
-from pyspark.sql import SparkSession
-from schemas.gkg_schema import gkg_schema
-from etl.parse_gkg import gkg_parser
-from pyspark.sql.functions import col, concat_ws
 import glob
 import shutil
-import time, datetime, pytz
+import time
+import datetime
+import pytz
+import logging
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, struct, array_distinct, concat_ws
+from pyspark.sql.utils import AnalysisException
+from pyspark.sql.types import StructType # Import StructType if used directly in schema definition
 
-#Get download file link from web
-LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
-DOWNLOAD_FOLDER = "./csv"
-LOG_FILE = "./logs/log.txt"
-SCRAPING_LOG_FILE = "./logs/scraping_log.txt"
-INGESTION_LOG_FILE = "./logs/ingestion_log.txt"
-TIMESTAMP_LOG_FILE = "./logs/timestamp_log.txt"
-JSON_LOG_FILE = "./logs/json_log.txt"
+# Assuming schemas are in the same directory structure or installed package
+# It's better practice to handle imports relative to the project structure
+# If run as a script, ensure PYTHONPATH is set or use relative imports carefully.
+try:
+    from schemas.gkg_schema import gkg_schema
+    from etl.parse_gkg import gkg_parser # Assuming gkg_parser is correctly defined elsewhere
+except ImportError:
+    # Fallback for running directly if structure is flat or PYTHONPATH isn't set
+    logging.warning("Could not import schemas/etl using package structure, attempting direct import.")
+    # Add logic here if schemas/etl are in the same directory or handle error
+    # This part depends heavily on how you run this script.
+    # For now, assume the imports work as intended in the container.
+    from schemas.gkg_schema import gkg_schema
+    from etl.parse_gkg import gkg_parser
 
+
+# --- Configuration ---
+# Use environment variables with defaults
+LAST_UPDATE_URL = os.environ.get("GDELT_LAST_UPDATE_URL", "http://data.gdeltproject.org/gdeltv2/lastupdate.txt")
+# These paths should match the volumes mounted in docker-compose for the etl_processor service
+DOWNLOAD_FOLDER = os.environ.get("GDELT_DOWNLOAD_FOLDER", "/app/csv") # Internal container path
+LOG_FOLDER = os.environ.get("GDELT_LOG_FOLDER", "/app/logs") # Internal container path
+JSON_INGEST_FOLDER = os.environ.get("GDELT_JSON_INGEST_FOLDER", "/app/logstash_ingest_data/json") # Internal container path
+
+SPARK_APP_NAME = "GDELT_GKG_ETL"
+DOWNLOAD_INTERVAL_SECONDS = 15 * 60 # 15 minutes
+FILE_CLEANUP_INTERVAL_SECONDS = 6 * 60 * 60 # Every 6 hours
+FILE_AGE_THRESHOLD_SECONDS = 7 * 24 * 60 * 60 # 7 days
+
+# --- Logging Setup ---
+LOG_FORMAT = '%(asctime)s - %(levelname)s - %(threadName)s - %(message)s'
+LOG_FILE = os.path.join(LOG_FOLDER, "gdelt_etl.log")
+TIMESTAMP_LOG_FILE = os.path.join(LOG_FOLDER, "timestamp.log")
+
+# Ensure log directory exists (important when run in container)
+os.makedirs(LOG_FOLDER, exist_ok=True)
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
-os.makedirs("./logs", exist_ok=True)
+os.makedirs(JSON_INGEST_FOLDER, exist_ok=True)
 
-# Cleans the logs at the start of every session.
-with open(LOG_FILE, "w") as f:
-    f.write("")
 
-def write(content, file):
-    '''
-    Logs messages to a text file, keeping only the first 500 lines of log text.
-    '''
-    if not content:
-        return
-    
-    timezone = pytz.timezone("Asia/Singapore")  # or "Asia/Shanghai", "Asia/Manila", etc.
-    current_time_gmt8 = datetime.datetime.now(timezone)
-    current_time = current_time_gmt8.strftime("%Y-%m-%d %H:%M:%S") + ": "
-    with open(file, "a", encoding="utf-8") as f:
-        f.write(current_time + content + "\n")
+logging.basicConfig(level=logging.INFO,
+                    format=LOG_FORMAT,
+                    handlers=[
+                        logging.FileHandler(LOG_FILE),
+                        logging.StreamHandler(sys.stdout) # Log to console (Docker logs) as well
+                    ])
 
-def write_all(msg, file_list = [LOG_FILE, INGESTION_LOG_FILE, JSON_LOG_FILE]):
-    '''
-    Writes the message to all 3 log files in logstash.
-    '''
-    for FILE in file_list: write(msg, FILE)
+# --- Spark Session Management ---
+spark = None # Initialize spark variable
+try:
+    spark = SparkSession.builder.appName(SPARK_APP_NAME).getOrCreate()
+    logging.info(f"SparkSession '{SPARK_APP_NAME}' created successfully.")
+except Exception as e:
+    logging.critical(f"Failed to create SparkSession: {e}", exc_info=True)
+    # Decide if the script should exit if Spark fails. Usually yes for an ETL script.
+    sys.exit(1)
 
+# --- Helper Functions ---
 def get_latest_gdelt_links():
-    """
-    Fetches the latest update file and extracts the download URLs.
-    :return: List of CSV ZIP file URLs
-    """
-    response = requests.get(LAST_UPDATE_URL)
-    
-    if response.status_code != 200:
-        write("Extraction failure: failed to fetch lastupdate.txt", LOG_FILE)
+    """Fetches the latest update file and extracts the download URLs."""
+    try:
+        response = requests.get(LAST_UPDATE_URL, timeout=30)
+        response.raise_for_status()
+        lines = response.text.strip().split("\n")
+        urls = [line.split()[-1] for line in lines if line.endswith(".zip")]
+        logging.info(f"Found {len(urls)} potential GDELT file URLs.")
+        return urls
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Extraction failure: failed to fetch {LAST_UPDATE_URL}. Error: {e}")
         return []
-    
-    lines = response.text.strip().split("\n")
-    urls = [line.split()[-1] for line in lines if line.endswith(".zip")]
-    
-    return urls
+    except Exception as e:
+        logging.error(f"Unexpected error fetching GDELT links: {e}", exc_info=True)
+        return []
 
 def download_and_extract(url):
-    """
-    Downloads a ZIP file from the given URL and extracts CSV files.
-    :param url: The URL to fetch the zip files from
-    """
-    response = requests.get(url, stream=True)
-    
-    if response.status_code != 200:
-        write_all(f"Extraction failure: {url}", [LOG_FILE, SCRAPING_LOG_FILE])
-        return
-    
-    zip_file = zipfile.ZipFile(BytesIO(response.content))
-    
-    for file in zip_file.namelist():
-        if file.lower().endswith("gkg.csv"):
-            write_all(f"Extracting latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
-            zip_file.extract(file, DOWNLOAD_FOLDER)
-            write_all(f"Extracted latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
+    """Downloads a ZIP file from the given URL and extracts GKG CSV files."""
+    extracted_files = []
+    try:
+        logging.info(f"Attempting download: {url}")
+        response = requests.get(url, stream=True, timeout=60)
+        response.raise_for_status()
 
-def run_pipeline(raw_file, json_output):
-    """
-    Reads a raw GKG CSV file, transforms each line using gkg_parser,
-    creates a Spark DataFrame with the defined schema, and writes the output as a single
-    JSON file.
-    :param raw_file: Directory containing raw CSV file
-    :param json_output: Path where JSON files should be output into
-    """
-    spark = SparkSession.builder.appName("Standalone GKG ETL").getOrCreate()
+        with zipfile.ZipFile(BytesIO(response.content)) as zip_file:
+            for file_info in zip_file.infolist():
+                if file_info.filename.lower().endswith("gkg.csv") and not file_info.is_dir():
+                    safe_filename = os.path.basename(file_info.filename)
+                    if safe_filename:
+                        target_path = os.path.join(DOWNLOAD_FOLDER, safe_filename)
+                        logging.info(f"Extracting: {safe_filename} to {DOWNLOAD_FOLDER}")
+                        # Extract to a temporary location within the volume first
+                        # to handle potential permission issues or complex paths in zip
+                        temp_extract_path = os.path.join(DOWNLOAD_FOLDER, f"temp_{safe_filename}")
+                        zip_file.extract(file_info, path=DOWNLOAD_FOLDER) # Extract preserving structure initially
+                        extracted_full_path = os.path.join(DOWNLOAD_FOLDER, file_info.filename)
 
-    # Read the raw file as an RDD of lines.
-    rdd = spark.sparkContext.textFile(raw_file)
-    
-    # Apply the transformation using gkg_parser (which splits each line into 27 fields).
-    parsed_rdd = rdd.map(lambda line: gkg_parser(line))
-    
-    # Convert the transformed RDD to a DataFrame using the defined gkg_schema.
-    df = spark.createDataFrame(parsed_rdd, schema=gkg_schema)
+                        # Move the extracted file to the final target path if different
+                        if os.path.exists(extracted_full_path):
+                            shutil.move(extracted_full_path, target_path)
+                            extracted_files.append(target_path)
+                            logging.info(f"Extracted successfully: {safe_filename}")
+                        else:
+                             logging.error(f"Extracted file not found at expected path: {extracted_full_path}")
 
-    # Concatenate GkgRecordId.Date and GkgRecordId.NumberInBatch with "-"
+                    else:
+                        logging.warning(f"Skipping potentially unsafe filename in zip: {file_info.filename}")
+            return extracted_files
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Download/Extraction failure for {url}. Request Error: {e}")
+    except zipfile.BadZipFile:
+        logging.error(f"Download/Extraction failure for {url}. Invalid ZIP file.")
+    except IOError as e:
+         logging.error(f"Download/Extraction failure for {url}. File I/O error: {e}")
+    except Exception as e:
+        logging.error(f"Unexpected error downloading/extracting {url}: {e}", exc_info=True)
+    return []
+
+def transform_gkg_dataframe(df):
+    """Applies transformations to the raw GKG DataFrame."""
     df_transformed = df.withColumn(
         "RecordId",
         concat_ws("-", col("GkgRecordId.Date").cast("string"), col("GkgRecordId.NumberInBatch").cast("string"))
     )
+    cols_to_drop = [
+        "V1Counts", "V1Locations", "V1Orgs", "V1Persons", "V1Themes",
+        "V21Amounts", "V21Counts", "V21EnhancedDates"
+    ]
+    df_transformed = df_transformed.drop(*cols_to_drop)
+    nested_structs_simple = {
+        "V15Tone": ["Tone", "PositiveScore", "NegativeScore", "Polarity", "ActivityRefDensity", "SelfGroupRefDensity"],
+        "V21Quotations": ["Verb", "Quote"], "V2Persons": ["V1Person"], "V2Orgs": ["V1Org"],
+        "V2EnhancedThemes": ["V2Theme"]
+    }
+    for col_name, fields in nested_structs_simple.items():
+        df_transformed = df_transformed.withColumn(col_name, struct(*(col(f"{col_name}.{f}") for f in fields)))
+    df_transformed = df_transformed.withColumn("V2Locations", struct(
+            col("V2Locations.FullName"), col("V2Locations.CountryCode"), col("V2Locations.ADM1Code"),
+            col("V2Locations.ADM2Code"), col("V2Locations.LocationLatitude"), col("V2Locations.LocationLongitude"),
+            col("V2Locations.FeatureId")))
+    array_structs_distinct = {
+        "V2Locations": ["FullName", "CountryCode", "ADM1Code", "ADM2Code", "LocationLatitude", "LocationLongitude", "FeatureId"],
+        "V2Persons": ["V1Person"], "V2EnhancedThemes": ["V2Theme"], "V2Orgs": ["V1Org"],
+        "V2GCAM": ["DictionaryDimId"], "V21Quotations": ["Verb", "Quote"], "V21AllNames": ["Name"]
+    }
+    for col_name, fields in array_structs_distinct.items():
+         df_transformed = df_transformed.withColumn(col_name, struct(*(array_distinct(col(f"{col_name}.{f}")).alias(f) for f in fields)))
+    cols_to_flatten = ["V21ShareImg", "V21SocImage", "V2DocId", "V21RelImg", "V21Date"]
+    for col_name in cols_to_flatten:
+         if col_name in df_transformed.columns and isinstance(df_transformed.schema[col_name].dataType, StructType):
+              df_transformed = df_transformed.withColumn(col_name, col(f"{col_name}.{col_name}"))
+    return df_transformed
 
-    df_transformed = df_transformed.drop("V1Counts") 
-    df_transformed = df_transformed.drop("V1Locations")
-    df_transformed = df_transformed.drop("V1Orgs")
-    df_transformed = df_transformed.drop("V1Persons")
-    df_transformed = df_transformed.drop("V1Themes")
-    df_transformed = df_transformed.drop("V21Amounts")
-    df_transformed = df_transformed.drop("V21Counts")
-    df_transformed = df_transformed.drop("V21EnhancedDates")
+def run_spark_pipeline(spark_session, raw_file_path):
+    """Processes a single raw GKG CSV file using Spark."""
+    base_filename = os.path.basename(raw_file_path)
+    output_json_filename = base_filename.replace(".csv", ".json")
+    # Use a temporary directory within the main download folder for Spark output parts
+    temp_spark_output_dir = os.path.join(DOWNLOAD_FOLDER, f"{base_filename}_spark_temp")
+    final_json_path = os.path.join(JSON_INGEST_FOLDER, output_json_filename)
+    logging.info(f"Starting Spark pipeline for: {base_filename}")
+    try:
+        rdd = spark_session.sparkContext.textFile(raw_file_path)
+        parsed_rdd = rdd.map(lambda line: gkg_parser(line))
+        # Ensure gkg_parser returns tuples of the correct length or handles errors appropriately
+        # Filter based on expected number of fields in the schema
+        num_expected_fields = len(gkg_schema.fields)
+        filtered_rdd = parsed_rdd.filter(lambda x: isinstance(x, (tuple, list)) and len(x) == num_expected_fields)
+        # Log if records were filtered (optional)
+        # original_count = parsed_rdd.count()
+        # filtered_count = filtered_rdd.count()
+        # if original_count != filtered_count:
+        #    logging.warning(f"Filtered out {original_count - filtered_count} potentially corrupt records from {base_filename}")
 
+        if filtered_rdd.isEmpty():
+             logging.warning(f"No valid records found after parsing {base_filename}. Skipping.")
+             return None
 
-    df_transformed = df_transformed.withColumn(
-        "V15Tone",
-        struct(
-            col("V15Tone.Tone"),
-            col("V15Tone.PositiveScore"),
-            col("V15Tone.NegativeScore"),
-            col("V15Tone.Polarity"),
-            col("V15Tone.ActivityRefDensity"),
-            col("V15Tone.SelfGroupRefDensity")  # Removed 'WordCount'
-        )
-    )
+        df = spark_session.createDataFrame(filtered_rdd, schema=gkg_schema)
+        df_transformed = transform_gkg_dataframe(df)
 
-    df_transformed = df_transformed.withColumn(
-        "V21Quotations",
-        struct(
-            col("V21Quotations.Verb"),
-            col("V21Quotations.Quote")  # Removed 'WordCount'
-        )
-    )
+        if os.path.exists(temp_spark_output_dir):
+            shutil.rmtree(temp_spark_output_dir)
+            logging.info(f"Removed existing temp Spark output: {temp_spark_output_dir}")
 
-    df_transformed = df_transformed.withColumn(
-        "V2Persons",
-        struct(
-            col("V2Persons.V1Person") # Removed 'WordCount'
-        )
-    )
+        df_transformed.coalesce(1).write.mode("overwrite").json(temp_spark_output_dir)
+        logging.info(f"Spark job finished. Intermediate JSON parts written to {temp_spark_output_dir}")
 
-    df_transformed = df_transformed.withColumn(
-        "V2Orgs",
-        struct(
-            col("V2Orgs.V1Org")  # Removed 'WordCount'
-        )
-    )
+        json_part_files = glob.glob(os.path.join(temp_spark_output_dir, "part-*.json"))
+        if not json_part_files:
+            logging.error(f"No JSON part file found in {temp_spark_output_dir} for {base_filename}")
+            return None
 
-    df_transformed = df_transformed.withColumn(
-        "V2Locations",
-        struct(
-            col("V2Locations.FullName"),
-            col("V2Locations.CountryCode"),
-            col("V2Locations.ADM1Code"),
-            col("V2Locations.ADM2Code"),
-            col("V2Locations.LocationLatitude"),
-            col("V2Locations.LocationLongitude"),
-            col("V2Locations.FeatureId")  # Removed 'WordCount'
-        )
-    )
+        source_part_file = json_part_files[0]
+        shutil.move(source_part_file, final_json_path)
+        logging.info(f"Moved and renamed JSON output to: {final_json_path}")
+        return final_json_path
+    except AnalysisException as e:
+        logging.error(f"Spark Analysis Error processing {base_filename}: {e}", exc_info=True)
+        return None
+    except IOError as e:
+        logging.error(f"File I/O Error during Spark processing or cleanup for {base_filename}: {e}", exc_info=True)
+        return None
+    except Exception as e:
+        logging.error(f"Unexpected Spark pipeline error for {base_filename}: {e}", exc_info=True)
+        return None
+    finally:
+        try:
+            if os.path.exists(temp_spark_output_dir):
+                shutil.rmtree(temp_spark_output_dir)
+                logging.info(f"Cleaned up temp Spark output directory: {temp_spark_output_dir}")
+        except Exception as e:
+            logging.warning(f"Could not clean up temp Spark directory {temp_spark_output_dir}: {e}")
 
-    df_transformed = df_transformed.withColumn(
-        "V2EnhancedThemes",
-        struct(
-            col("V2EnhancedThemes.V2Theme")  # Removed 'WordCount'
-        )
-    )
-    
-    # Remove duplicates
-    df_transformed = df_transformed.withColumn(
-        "V2Locations",
-        struct(
-            array_distinct(col("V2Locations.FullName")).alias("FullName"),
-            array_distinct(col("V2Locations.CountryCode")).alias("CountryCode"),
-            array_distinct(col("V2Locations.ADM1Code")).alias("ADM1Code"),
-            array_distinct(col("V2Locations.ADM2Code")).alias("ADM2Code"),
-            array_distinct(col("V2Locations.LocationLatitude")).alias("LocationLatitude"),
-            array_distinct(col("V2Locations.LocationLongitude")).alias("LocationLongitude"),
-            array_distinct(col("V2Locations.FeatureId")).alias("FeatureId")
-        )
-    )
-    df_transformed = df_transformed.withColumn(
-        "V2Persons",
-        struct(
-            array_distinct(col("V2Persons.V1Person")).alias("V1Person"),
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2EnhancedThemes",
-        struct(
-            array_distinct(col("V2EnhancedThemes.V2Theme")).alias("V2Theme"),
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2Orgs",
-        struct(
-            array_distinct(col("V2Orgs.V1Org")).alias("V1Org"),
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2GCAM",
-        struct(
-            array_distinct(col("V2GCAM.DictionaryDimId")).alias("DictionaryDimId"),
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V21Quotations",
-        struct(
-            array_distinct(col("V21Quotations.Verb")).alias("Verb"),
-            array_distinct(col("V21Quotations.Quote")).alias("Quote"),
-        )
-    )
-
-
-    df_transformed = df_transformed.withColumn(
-        "V21AllNames",
-        struct(
-            array_distinct(col("V21AllNames.Name")).alias("Name"),
-        )
-    )
-    
-    # Changing column names
-    column_names = ["V21ShareImg", "V21SocImage", "V2DocId", "V21RelImg", "V21Date"]
-    for col_name in column_names:
-        df_transformed = df_transformed.withColumn(col_name, col(f"{col_name}.{col_name}"))
-
-    # Reduce to a single partition so that we get one output file.
-    df_transformed.coalesce(1).write.mode("overwrite").json(json_output)
-    write(f"Pipeline completed. Single JSON output written to {json_output}", JSON_LOG_FILE)
-
-    # Locates a JSON output file
-    json_part_file = glob.glob(os.path.join(json_output, "part-00000-*.json"))[0]
-
-    # Constructing new JSON file name
-    date_part = str((raw_file.split('/')[2].split('.'))[0])
-    new_file_name = f"{date_part}.json"
-
-    # Moves JSON file, and copies renamed file for ingestion
-    shutil.move(json_part_file, os.path.join(json_output, new_file_name))
-    move_json_to_ingest(os.path.join(json_output, new_file_name))
-
-    spark.stop()
-
-def process_downloaded_files():
-    '''
-    Process downloaded CSV files, converting them into JSON format,
-    and delete the processed CSV file.
-    '''
-    # Source directory for CSV files
-    src_path = "./csv"
-    
-    while True:
-        # List only the filenames in the CSV folder
-        files = os.listdir(src_path)
-        for file in files:
-            if file.endswith(".csv"):
-                # Build the full path to the file
-                raw_file_path = os.path.join(src_path, file)
-                # Create the JSON output path by replacing .csv with .json
-                json_output_path = raw_file_path.replace(".csv", ".json")
-                
-                write_all(f"Transforming file into JSON: {file}")
-                run_pipeline(raw_file_path, json_output_path)
-                
-                # Remove the CSV file using its full path
-                write_all(f"Transformed file into JSON: {file}")
-                os.remove(raw_file_path)
-                write(f"Deleted processed CSV file: {raw_file_path}", JSON_LOG_FILE)
-
-                # Cleaning the corresponding JSON folder
-                json_folder = file.split(".")[0] + ".gkg.json"
-                json_folder_full = os.path.join(src_path, json_folder)
-                try:
-                    shutil.rmtree(json_folder_full)
-                    write(f"Deleted processed Spark folder: {json_folder}", JSON_LOG_FILE)
-                except Exception as e:
-                    write(f"Error deleting Spark folder {json_folder}: {e}", JSON_LOG_FILE)
-
-def move_json_to_ingest(file_path):
-    '''
-    Moves the JSON file over to the json subfolder in logstash_ingest_data.
-    :param file_path: File path of target file to be shifted.
-    '''
-    logstash_path = "./logstash_ingest_data/json"
-    os.makedirs(logstash_path, exist_ok=True)
-    
-    # Only copy the .json file
-    if os.path.isfile(file_path) and file_path.endswith(".json"):
-        # Get the filename from the full path and copy to the target directory
-        target_path = os.path.join(logstash_path, os.path.basename(file_path))
-        shutil.move(file_path, target_path)
-        write(f"Copied {file_path} to {target_path}",JSON_LOG_FILE)
-    else:
-        write(f"Invalid file: {file_path} (Not a JSON file or file doesn't exist)",JSON_LOG_FILE)
-
-def delete_old_json(directory="./logstash_ingest_data/json"):
-    while True:
-        # 1 week's leeway
-        age_threshold = 24 * 60 * 60 * 7
-        current_time = time.time()
-
-        # Cleaning JSON folders
-        for filename in os.listdir(directory):
-            file_path = os.path.join(directory, filename)
-
-            # Check if it's a file
-            if file_path.endswith(".json") or file_path.endswith(".csv"):
-                    # Get the last modification time
-                    file_mod_time = os.path.getmtime(file_path)
-
-                    # Deletes file if it is older than 24 hours
-                    if (current_time - file_mod_time) > age_threshold:
-                        write_all(f"Deleting: {file_path}")
-                        os.remove(file_path)
-
-def server_scrape():
-    '''
-    Scrapes data off the GDELT server,
-    and downloads the resultant CSV files every 15 minutes.
-    '''
-    file_list = [LOG_FILE, SCRAPING_LOG_FILE]
+def process_downloaded_files(spark_session):
+    """Continuously monitors the download folder and processes new CSV files."""
+    processed_files = set()
     while True:
         try:
+            files_to_process = [
+                os.path.join(DOWNLOAD_FOLDER, f)
+                for f in os.listdir(DOWNLOAD_FOLDER)
+                if f.lower().endswith(".csv") and os.path.join(DOWNLOAD_FOLDER, f) not in processed_files
+            ]
+            if not files_to_process:
+                sleep(30)
+                continue
+
+            for csv_file_path in files_to_process:
+                base_filename = os.path.basename(csv_file_path)
+                logging.info(f"Found CSV file to process: {base_filename}")
+                processed_files.add(csv_file_path)
+                json_output_path = run_spark_pipeline(spark_session, csv_file_path)
+                if json_output_path:
+                    logging.info(f"Successfully processed {base_filename} -> {os.path.basename(json_output_path)}")
+                    try:
+                        os.remove(csv_file_path)
+                        logging.info(f"Deleted processed CSV file: {base_filename}")
+                    except OSError as e:
+                        logging.error(f"Failed to delete processed CSV file {base_filename}: {e}")
+                else:
+                    logging.error(f"Failed to process CSV file: {base_filename}. Will not retry.")
+        except Exception as e:
+            logging.error(f"Error in file processing loop: {e}", exc_info=True)
+            sleep(60)
+
+def delete_old_files(directory, age_threshold_seconds):
+    """Deletes files in a directory older than the specified threshold."""
+    logging.info(f"Running cleanup task for directory: {directory}")
+    try:
+        current_time = time.time(); deleted_count = 0
+        for filename in os.listdir(directory):
+            file_path = os.path.join(directory, filename)
+            try:
+                if os.path.isfile(file_path):
+                    file_mod_time = os.path.getmtime(file_path)
+                    if (current_time - file_mod_time) > age_threshold_seconds:
+                        os.remove(file_path)
+                        logging.info(f"Deleted old file: {filename} (older than {age_threshold_seconds / 3600:.1f} hours)")
+                        deleted_count += 1
+            except OSError as e:
+                logging.warning(f"Could not process or delete file {filename}: {e}")
+        logging.info(f"Cleanup task finished for {directory}. Deleted {deleted_count} old files.")
+    except Exception as e:
+        logging.error(f"Error during cleanup task for {directory}: {e}", exc_info=True)
+
+def periodic_cleanup():
+    """Periodically runs the cleanup task."""
+    while True:
+        try:
+            delete_old_files(JSON_INGEST_FOLDER, FILE_AGE_THRESHOLD_SECONDS)
+            sleep(FILE_CLEANUP_INTERVAL_SECONDS)
+        except Exception as e:
+            logging.error(f"Error in periodic cleanup loop: {e}", exc_info=True)
+            sleep(60)
+
+def server_scrape():
+    """Periodically scrapes GDELT server for new file links and downloads them."""
+    while True:
+        try:
+            logging.info("Checking GDELT for latest update links...")
             csv_zip_urls = get_latest_gdelt_links()
-
             if not csv_zip_urls:
-                write_all("No CSV ZIP links found in lastupdate.txt", file_list)
+                logging.info("No new CSV ZIP links found.")
             else:
-                write_all(f"Found {len(csv_zip_urls)} files to download (15 min interval)...", file_list)
+                logging.info(f"Found {len(csv_zip_urls)} files to potentially download...")
                 for url in csv_zip_urls:
-                    download_and_extract(url)
+                    timestamp = url.split('/')[-1].split('.')[0]
+                    potential_csv = os.path.join(DOWNLOAD_FOLDER, f"{timestamp}.gkg.csv")
+                    potential_json = os.path.join(JSON_INGEST_FOLDER, f"{timestamp}.gkg.json")
+                    if not os.path.exists(potential_csv) and not os.path.exists(potential_json):
+                         download_and_extract(url)
+                    else:
+                         logging.info(f"Skipping download for {timestamp}, appears to exist locally.")
+            # Log timestamp for monitoring
+            try:
+                timezone = pytz.timezone("Asia/Singapore") # Consider making timezone configurable
+                timestamp_str = datetime.datetime.now(timezone).strftime("%Y-%m-%d %H:%M:%S")
+                with open(TIMESTAMP_LOG_FILE, "a") as f: f.write(timestamp_str + "\n")
+            except IOError as e: logging.warning(f"Could not write to timestamp log: {e}")
 
-            write("\n", TIMESTAMP_LOG_FILE)
+            logging.info(f"Scraping cycle complete. Sleeping for {DOWNLOAD_INTERVAL_SECONDS} seconds.")
+            sleep(DOWNLOAD_INTERVAL_SECONDS)
+        except Exception as e:
+            logging.error(f"Error in server scraping loop: {e}", exc_info=True)
+            sleep(60)
 
-            # Repeats the scraping and downloading process every 15 min
-            sleep(15*60)     
-
-        except:
-            write_all(f"Error: {url} cannot be successfully downloaded!", file_list)
-
-############################################# Main ############################################
+# --- Main Execution ---
 if __name__ == "__main__":
-    thread1 = threading.Thread(target=server_scrape, daemon=True)
-    thread2 = threading.Thread(target=process_downloaded_files, daemon=True)
-    thread3 = threading.Thread(target=delete_old_json, daemon=True)
-    
-    thread1.start()
-    thread2.start()
-    thread3.start()
-    thread1.join()
-    thread2.join()
-    thread3.join()
+    # Ensure SparkSession was created
+    if spark is None:
+         logging.critical("SparkSession failed to initialize. Exiting main script.")
+         sys.exit(1)
+
+    scraper_thread = threading.Thread(target=server_scrape, name="ScraperThread", daemon=True)
+    processor_thread = threading.Thread(target=process_downloaded_files, args=(spark,), name="ProcessorThread", daemon=True)
+    cleanup_thread = threading.Thread(target=periodic_cleanup, name="CleanupThread", daemon=True)
+
+    logging.info("Starting GDELT ETL Threads...")
+    scraper_thread.start()
+    processor_thread.start()
+    cleanup_thread.start()
+
+    try:
+        while True:
+            # Basic thread health check
+            if not scraper_thread.is_alive() or not processor_thread.is_alive():
+                 logging.error("A critical worker thread (Scraper or Processor) has died. Exiting.")
+                 break
+            if not cleanup_thread.is_alive():
+                 logging.warning("CleanupThread died unexpectedly. It might restart or indicate an issue.")
+                 # Optionally attempt to restart cleanup_thread if needed
+            sleep(60)
+    except KeyboardInterrupt:
+        logging.info("Shutdown signal received. Exiting.")
+    finally:
+        # Attempt graceful shutdown of Spark
+        try:
+            if spark:
+                logging.info("Stopping SparkSession...")
+                spark.stop()
+                logging.info("SparkSession stopped.")
+        except Exception as e:
+            logging.error(f"Error stopping SparkSession: {e}", exc_info=True)
+    logging.info("GDELT ETL Main Thread Finished.")
+

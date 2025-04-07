@@ -1,4 +1,10 @@
-Flask==2.2.2
-Werkzeug==2.2.2
-requests==2.26.0
+certifi==2025.1.31
+charset-normalizer==3.4.1
+idna==3.10
+py4j==0.10.9.7
+pyspark==3.5.5
+requests==2.32.3
+urllib3==2.3.0
 pytz
+flask
+elasticsearch>=8.0.0,<9.0.0 # Added Elasticsearch client

@@ -1,322 +1,527 @@
 <!doctype html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="utf-8">
-    <title>Dashboard</title>
-    <!-- Bootstrap CSS for styling -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <!-- jQuery for AJAX calls -->
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GDELT Pipeline Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://rsms.me/">
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
     <style>
-      /* Style for the circular status indicator */
-      .status-indicator {
-        height: 20px;
-        width: 20px;
-        display: inline-block;
-        border-radius: 50%;
-      }
-      /* Log panel styling */
-      .log-panel {
-        background: #f8f8f8;
-        border: 1px solid #ddd;
-        padding: 10px;
-        height: 300px;
-        overflow-y: scroll;
-        white-space: pre-wrap;
-        font-family: monospace;
-      }
-      /* Scraping and Ingestion log container styling */ 
-      .log-container {
-        background: #f8f8f8;
-        border: 1px solid #ccc;
-        padding: 15px;
-        font-family: monospace;
-        height: 350px;
-        white-space: pre-wrap;
-      }
+        /* Custom scrollbar for log panels (optional) */
+        .log-panel::-webkit-scrollbar { width: 8px; }
+        .log-panel::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        .log-panel::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+        .log-panel::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        /* Style for pipeline status indicators */
+        .status-dot {
+            width: 12px; height: 12px; border-radius: 50%;
+            display: inline-block; vertical-align: middle; margin-left: 8px;
+        }
+        /* Progress bar styling */
+        .progress-bar-container {
+            background-color: #e5e7eb; /* gray-200 */
+            border-radius: 0.375rem; /* rounded-md */
+            overflow: hidden; height: 0.75rem; /* h-3 */
+        }
+        .progress-bar {
+            background-color: #3b82f6; /* blue-500 */
+            height: 100%; transition: width 0.3s ease-in-out;
+            border-radius: 0.375rem; /* rounded-md */
+        }
+        /* Lucide Icons setup - Corrected URL usage */
+        .icon {
+             display: inline-block; width: 1.1em; height: 1.1em;
+             vertical-align: -0.15em; background-color: currentColor;
+             -webkit-mask-size: cover; mask-size: cover;
+        }
+        .icon-sm { /* Smaller icon for title indicators */
+            width: 1em; height: 1em; vertical-align: -0.1em; margin-left: 6px;
+        }
+        /* --- Corrected Icon Definitions --- */
+        .icon-download { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/download-cloud.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/download-cloud.svg'); } /* Extract */
+        .icon-process { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/cog.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/cog.svg'); } /* Transform */
+        .icon-upload { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/upload-cloud.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/upload-cloud.svg'); } /* Load */
+        .icon-play { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/play.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/play.svg'); }
+        .icon-calendar-range { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/calendar-range.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/calendar-range.svg'); }
+        .icon-loader { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/loader-circle.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/loader-circle.svg'); animation: spin 1s linear infinite; }
+        .icon-check { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/check-circle-2.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/check-circle-2.svg'); }
+        .icon-error { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/alert-circle.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/alert-circle.svg'); }
+        .icon-info { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/info.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/info.svg'); }
+        .icon-file-text { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/file-text.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/file-text.svg'); }
+        .icon-circle-dashed { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/circle-dashed.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/circle-dashed.svg'); } /* Idle state */
+        .icon-skip { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/skip-forward.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/skip-forward.svg'); } /* Icon for skipped count */
+        .icon-cancel { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/x-circle.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/x-circle.svg'); }
+        .icon-abort { -webkit-mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/slash.svg'); mask-image: url('https://cdn.jsdelivr.net/npm/lucide-static@0.408.0/icons/slash.svg'); } /* Icon for aborted state */
+        /* --- END Corrected Icon Definitions --- */
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Style for cancel button */
+        .cancel-button {
+             display: none; /* Hidden by default */
+             /* Removed margin-left as absolute positioning handles placement */
+             padding: 2px 6px; /* Smaller padding */
+             font-size: 0.8rem; /* Smaller text */
+             line-height: 1; /* Adjust line height */
+        }
     </style>
-  </head>
-  <body>
-    <div class="container mt-4">
-      <h1>Dashboard</h1>
-      <div class="row">
-        <!-- Scraping Pipeline Panel -->
-        <div class="col-md-6 mb-3">
-          <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <div>
-                Scraping Pipeline
-                <span id="scrapingIndicator" class="status-indicator bg-secondary ml-2"></span>
-              </div>
-              <div>
-                Scraping again in: <span id="remaining">Loading...</span>
-              </div>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800">
+    <div class="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
+        <h1 class="text-3xl font-bold mb-6 text-gray-700">GDELT Pipeline Dashboard</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h2 class="text-lg font-semibold mb-2 text-gray-600 flex items-center">
+                    <span class="icon icon-download mr-2"></span>Extract Phase
+                </h2>
+                <div class="flex items-center">
+                    <span id="extractStatusText" class="capitalize text-gray-700">Loading...</span>
+                    <span id="extractIndicator" class="status-dot bg-gray-400"></span>
+                </div>
+                 <p class="text-xs text-gray-500 mt-1">Scraping GDELT files</p>
+                 <p class="text-xs text-gray-500 mt-2">Next scrape in: <span id="remaining" class="font-medium">Loading...</span></p>
             </div>
-            <div id="scrapingLogCollapse" class="collapse show">
-              <div class="card-body">
-                <div id="scrapingLog" class="log-container"></div>
-              </div>
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h2 class="text-lg font-semibold mb-2 text-gray-600 flex items-center">
+                     <span class="icon icon-process mr-2"></span>Transform Phase
+                </h2>
+                 <div class="flex items-center">
+                    <span id="transformStatusText" class="capitalize text-gray-700">Loading...</span>
+                    <span id="transformIndicator" class="status-dot bg-gray-400"></span>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Processing files with PySpark</p>
             </div>
-          </div>
+            <div class="bg-white p-4 rounded-lg shadow">
+                 <h2 class="text-lg font-semibold mb-2 text-gray-600 flex items-center">
+                     <span class="icon icon-upload mr-2"></span>Load Phase
+                 </h2>
+                 <div class="flex items-center">
+                    <span id="loadStatusText" class="capitalize text-gray-700">Loading...</span>
+                    <span id="loadIndicator" class="status-dot bg-gray-400"></span>
+                </div>
+                 <p class="text-xs text-gray-500 mt-1">Ingesting JSON via Logstash</p>
+            </div>
         </div>
-        
-        <!-- Ingestion Pipeline Panel -->
-        <div class="col-md-6 mb-3">
-          <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <div>
-                Ingestion Pipeline
-                <span id="ingestionIndicator" class="status-indicator bg-secondary ml-2"></span>
-              </div>
-              
-            </div>
-            <div id="ingestionLogCollapse" class="collapse show">
-              <div class="card-body">
-                <div id="ingestionLog" class="log-container"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Patching Files Section -->
-      <div class="container mt-4">
-        <div class="row">
-          <div class="col-md-12">
-            <div class="card">
-              <div class="card-header">Patching Files</div>
-              <div class="card-body">
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+             <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center">
+                    <span class="icon icon-play mr-2"></span>Manual Patching
+                    <span id="patchTitleIndicator" class="icon icon-sm icon-circle-dashed text-gray-400"></span>
+                </h2>
                 <form id="patchForm">
-                  <div class="form-row align-items-end">
-                    <div class="col-auto">
-                      <label for="lookBackDays">Look Back Period (days):</label>
-                      <input type="number" 
-                             id="lookBackDays" 
-                             name="look_back_days" 
-                             class="form-control" 
-                             value="1" 
-                             min="1" 
-                             style="width:400px;">
+                    <div class="flex flex-col sm:flex-row sm:items-end gap-4">
+                        <div class="flex-grow">
+                            <label for="lookBackDays" class="block text-sm font-medium text-gray-600 mb-1">Look Back Period (days):</label>
+                            <input type="number" id="lookBackDays" name="look_back_days" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" value="1" min="1">
+                        </div>
+                        <button type="submit" id="startPatchBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out whitespace-nowrap disabled:opacity-50" >
+                            Start Patching
+                        </button>
                     </div>
-                    <div class="col-auto">
-                      <button type="submit" class="btn btn-primary">Start Patching</button>
-                    </div>
-                  </div>
                 </form>
-                <div id="patchStatus" class="mt-2"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Targeted Archival Ingestion Section -->
-      <div class="container mt-4">
-        <div class="row">
-          <div class="col-md-12">
-            <div class="card">
-              <div class="card-header">Targeted Archival Ingestion</div>
-              <div class="card-body">
+                <div id="patchTaskStatus" class="mt-4 text-sm text-gray-600 min-h-[4em] relative">
+                     <div id="patchTaskStatusContent">
+                         </div>
+                     <div class="absolute top-0 right-0">
+                         <button id="cancelPatchBtn" class="cancel-button bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs flex items-center disabled:opacity-50">
+                             <span class="icon icon-cancel mr-1"></span>Cancel
+                         </button>
+                     </div>
+                 </div>
+             </div>
+             <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center">
+                     <span class="icon icon-calendar-range mr-2"></span>Archive Download
+                     <span id="archiveTitleIndicator" class="icon icon-sm icon-circle-dashed text-gray-400"></span>
+                </h2>
                 <form id="archiveForm">
-                  <div class="form-row">
-                    <div class="col-md-4 mb-3">
-                      <label for="startDate">Start Date:</label>
-                      <input type="date" class="form-control" id="startDate" name="start_date" required>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                        <div>
+                            <label for="startDate" class="block text-sm font-medium text-gray-600 mb-1">Start Date:</label>
+                            <input type="date" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" id="startDate" name="start_date" required>
+                        </div>
+                        <div>
+                            <label for="endDate" class="block text-sm font-medium text-gray-600 mb-1">End Date:</label>
+                            <input type="date" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" id="endDate" name="end_date" required>
+                        </div>
+                        <button type="submit" id="startArchiveBtn" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-150 ease-in-out whitespace-nowrap disabled:opacity-50">
+                            Download Archive
+                        </button>
                     </div>
-                    <div class="col-md-4 mb-3">
-                      <label for="endDate">End Date:</label>
-                      <input type="date" class="form-control" id="endDate" name="end_date" required>
-                    </div>
-                    <div class="col-md-4 mb-3 align-self-end">
-                      <button type="button" id="getFilesBtn" class="btn btn-primary">Get Archive Files</button>
-                    </div>
-                  </div>
                 </form>
-                <div id="fileList" class="mt-3"></div>
-                <button type="button" id="ingestBtn" class="btn btn-success mt-3" style="display: none;">Confirm Ingestion</button>
-                <div id="ingestSummary" class="mt-3"></div>
-              </div>
-            </div>
-          </div>
+                 <div id="archiveTaskStatus" class="mt-4 text-sm text-gray-600 min-h-[4em] relative">
+                      <div id="archiveTaskStatusContent">
+                          </div>
+                      <div class="absolute top-0 right-0">
+                          <button id="cancelArchiveBtn" class="cancel-button bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs flex items-center disabled:opacity-50">
+                              <span class="icon icon-cancel mr-1"></span>Cancel
+                          </button>
+                      </div>
+                 </div>
+             </div>
         </div>
-      </div>
-      
-      <!-- Process Logs Panel -->
-      <div class="row mt-4">
-        <div class="col-md-12">
-          <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <div>Session Logs</div>
-              <button class="btn btn-sm btn-link" type="button" data-toggle="collapse" data-target="#logPanelCollapse" aria-expanded="true" aria-controls="logPanelCollapse">
-                Toggle Logs
-              </button>
-            </div>
-            <div id="logPanelCollapse" class="collapse show">
-              <div class="card-body">
-                <pre id="logPanel" class="log-panel"></pre>
-              </div>
-            </div>
-          </div>
+
+        <div class="bg-white p-6 rounded-lg shadow mb-6">
+             <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center">
+                 <span class="icon icon-file-text mr-2"></span>Main Process Logs (Extract/Transform)
+                 </h2>
+            <pre id="logPanel" class="log-panel bg-gray-50 p-4 rounded-md border border-gray-200 h-96 overflow-y-scroll text-xs font-mono whitespace-pre-wrap break-words"></pre>
         </div>
-      </div>
-      
-    </div>
-    
+    </div> <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-      // Global variable to keep track of the previous ingestion status
-      var prevIngestionStatus = null;
-      
-      // Poll the /remaining endpoint every second to update the countdown.
-      function updateRemaining() {
-        $.getJSON('/remaining', function(data) {
-            $('#remaining').text(data.remaining);
-        });
-      }
-      setInterval(updateRemaining, 1000);
-      updateRemaining();
+        // Store active task IDs and polling intervals
+        let activePatchTaskId = localStorage.getItem('activePatchTaskId'); // Persist slightly across reloads
+        let activeArchiveTaskId = localStorage.getItem('activeArchiveTaskId'); // Persist slightly across reloads
+        let taskPollingInterval = null;
+        const TASK_POLL_INTERVAL_MS = 2500; // Check task status more frequently
 
-      // Trigger patching for custom date range
-      $('#getFilesBtn').click(function () {
-        const startDate = $('#startDate').val();
-        const endDate = $('#endDate').val();
+        // --- Helper Functions ---
+        function updateStatusIndicator(elementId, statusTextElementId, status) {
+            const indicator = $(elementId);
+            const textElement = $(statusTextElementId);
+            indicator.removeClass('bg-gray-400 bg-green-500 bg-yellow-500 bg-red-500 animate-pulse'); // Reset classes
+            let statusText = status || 'Unknown';
+            let indicatorClass = 'bg-gray-400'; // Default: idle/unknown
 
-        if (!startDate || !endDate) {
-          alert('Please select both start and end dates.');
-          return;
-        }
-        $.ajax({
-        url: '/get_archive_files',
-        type: 'POST',
-        data: {
-          start_date: startDate,
-          end_date: endDate
-        },
-        error: function (xhr, status, error) {
-          let errorMessage = 'Failed to retrieve archive files. ';
-          
-          // Check for no response (bad internet connection)
-          if (xhr.status === 0) {
-            errorMessage += 'It seems there is a problem with your internet connection. Please check your network.';
-          } 
-          // Check for server errors
-          else if (xhr.status >= 500) {
-            errorMessage += 'The server encountered an error. Please try again later.';
-          } 
-          // Check for client errors or invalid scraping responses
-          else if (xhr.status >= 400) {
-            // Optionally, try to parse any JSON error message sent back by the server.
-            let responseText = xhr.responseText;
-            try {
-              let jsonResponse = JSON.parse(responseText);
-              if (jsonResponse.error) {
-                errorMessage += jsonResponse.error;
-              } else {
-                errorMessage += xhr.status + ': ' + xhr.statusText;
-              }
-            } catch (e) {
-              errorMessage += xhr.status + ': ' + xhr.statusText;
+            switch (status) {
+                case 'running': indicatorClass = 'bg-green-500 animate-pulse'; break;
+                case 'error': indicatorClass = 'bg-red-500'; break;
+                case 'idle': indicatorClass = 'bg-gray-400'; break;
             }
-          } 
-          else {
-            errorMessage += 'Error: ' + error;
-          } 
-          alert(errorMessage);
+            indicator.addClass(indicatorClass);
+            textElement.text(statusText.charAt(0).toUpperCase() + statusText.slice(1)); // Capitalize
         }
-      });
-      });
-      
-      // Function to poll the /status endpoint and update the indicators
-      function updateStatus() {
-        $.getJSON('/status', function(data) {
-          // Update scraping indicator
-          if (data.scraping === 'running') {
-            $('#scrapingIndicator').removeClass().addClass('status-indicator bg-success ml-2');
-          } else if (data.scraping === 'error') {
-            $('#scrapingIndicator').removeClass().addClass('status-indicator bg-danger ml-2');
-          } else {
-            $('#scrapingIndicator').removeClass().addClass('status-indicator bg-secondary ml-2');
-          }
-          
-          // Update ingestion indicator and send alert if ingestion has completed
-          if (data.ingestion === 'running') {
-            $('#ingestionIndicator').removeClass().addClass('status-indicator bg-success ml-2');
-          } else if (data.ingestion === 'error') {
-            $('#ingestionIndicator').removeClass().addClass('status-indicator bg-danger ml-2');
-          } else if (data.ingestion === 'completed') {
-            $('#ingestionIndicator').removeClass().addClass('status-indicator bg-secondary ml-2');
-            if (prevIngestionStatus === 'running') {
-              alert("Ingestion process has been completed!");
+
+        function updateLogPanel(panelId, logs) {
+            const panel = $(panelId);
+            // Simple sanitization
+            const sanitizedLogs = logs.map(line =>
+                 String(line).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+            );
+            panel.text(sanitizedLogs.join("\n"));
+            // Auto-scroll to bottom only if the user isn't scrolled up significantly
+            const scrollThreshold = 50; // Pixels from bottom
+            const isScrolledToBottom = panel.scrollTop() + panel.innerHeight() >= panel[0].scrollHeight - scrollThreshold;
+             if (isScrolledToBottom) {
+                  // Use setTimeout to ensure scroll happens after text update is rendered
+                  setTimeout(() => { panel.scrollTop(panel[0].scrollHeight); }, 0);
+             }
+        }
+
+
+        function updateTitleIndicator(indicatorId, status) {
+            const indicator = $(indicatorId);
+            indicator.removeClass().addClass('icon icon-sm'); // Reset classes
+            switch (status) {
+                case 'running':
+                case 'starting': // Treat starting like running for indicator
+                    indicator.addClass('icon-loader text-blue-500'); break;
+                case 'completed':
+                    indicator.addClass('icon-check text-green-500');
+                    // Revert to idle after a delay
+                    setTimeout(() => {
+                        const currentTask = (indicatorId === '#patchTitleIndicator') ? activePatchTaskId : activeArchiveTaskId;
+                        if (!currentTask) updateTitleIndicator(indicatorId, 'idle');
+                    }, 7000);
+                     break;
+                 case 'error':
+                    indicator.addClass('icon-error text-red-500');
+                    setTimeout(() => {
+                        const currentTask = (indicatorId === '#patchTitleIndicator') ? activePatchTaskId : activeArchiveTaskId;
+                        if (!currentTask) updateTitleIndicator(indicatorId, 'idle');
+                    }, 7000);
+                    break;
+                 case 'aborted': // Added aborted status
+                 case 'aborting': // Added aborting status
+                    indicator.addClass('icon-abort text-yellow-600'); // Use abort icon
+                     setTimeout(() => {
+                         const currentTask = (indicatorId === '#patchTitleIndicator') ? activePatchTaskId : activeArchiveTaskId;
+                         if (!currentTask) updateTitleIndicator(indicatorId, 'idle');
+                    }, 7000);
+                    break;
+                 default: // idle or unknown
+                    indicator.addClass('icon-circle-dashed text-gray-400'); break;
             }
-          } else {
-            $('#ingestionIndicator').removeClass().addClass('status-indicator bg-secondary ml-2');
-          }
-          prevIngestionStatus = data.ingestion;
-        });
-      }
-      
-      // Poll the status every second for real-time updates
-      setInterval(updateStatus, 1000);
-      
-      function updateScrapingLogs() {
-        $.getJSON('/scraping_logs', function(data) {
-          $('#scrapingLog').text(data.lines.join(""));
-        });
-      }
-      
-      // Function to update ingestion logs
-      function updateIngestionLogs() {
-        $.getJSON('/ingestion_logs', function(data) {
-          $('#ingestionLog').text(data.lines.join(""));
-        });
-      }
-      setInterval(updateScrapingLogs, 2000);
-      setInterval(updateIngestionLogs, 2000);
-      updateScrapingLogs();
-      updateIngestionLogs();
-      
-      function updateLogs() {
-      $.getJSON('/logs', function(data) {
-        if (data && data.lines && Array.isArray(data.lines)) {
-          let logContent = data.lines.join("\n");
-          $('#logPanel').text(logContent);
-        } else {
-          $('#logPanel').text("No logs available");
         }
-      });
-    }
-    setInterval(updateLogs, 2000);
-    updateLogs();
-      
-      // Handle patch form submission to trigger the patching function
-      $('#patchForm').submit(function(e) {
-        e.preventDefault();
-        var formData = $(this).serialize();
-        $.post('/patching', formData, function(response) {
-          $('#patchStatus').text(response.message);
-        });
-      });
-      
-      // Function to trigger ingestion of selected files
-      $("#ingestBtn").click(function() {
-        var selectedFiles = [];
-        $("input[name='selected_files']:checked").each(function() {
-          selectedFiles.push($(this).val());
-        });
-        if(selectedFiles.length === 0) {
-          alert("Please select at least one file.");
-          return;
+
+        // --- Display Task Status ---
+        // elementId: ID of the DIV where status CONTENT should be injected (e.g., #patchTaskStatusContent)
+        // taskData: The data object from the backend status endpoint
+        // indicatorId: ID of the title indicator icon (e.g., #patchTitleIndicator)
+        // cancelBtnId: ID of the cancel button (e.g., #cancelPatchBtn)
+        // currentTaskId: The active ID of the task being displayed
+        function displayTaskStatus(elementId, taskData, indicatorId, cancelBtnId, currentTaskId) {
+            const statusElement = $(elementId); // Now targets the *content* div
+            const cancelBtn = $(cancelBtnId);   // Targets the cancel button itself
+            let html = '', iconClass = 'icon-info', iconColor = 'text-gray-500';
+
+            // Clear previous content IN THE CONTENT DIV ONLY
+            statusElement.html('');
+            // Always manage cancel button visibility/state regardless of content
+            cancelBtn.hide().prop('disabled', true);
+
+            if (!taskData || !taskData.status) {
+                updateTitleIndicator(indicatorId, 'idle');
+                return; // No task data, clear display and ensure button is hidden
+            }
+
+            updateTitleIndicator(indicatorId, taskData.status); // Update title indicator
+
+            let countsHtml = '';
+            // Display counts only if they are defined and >= 0
+            if (taskData.success !== undefined) countsHtml += `<span class="mr-3 inline-flex items-center"><span class="icon icon-check text-green-500 mr-1"></span> Success: ${taskData.success}</span>`;
+            if (taskData.errors !== undefined) countsHtml += `<span class="mr-3 inline-flex items-center"><span class="icon icon-error text-red-500 mr-1"></span> Errors: ${taskData.errors}</span>`;
+            if (taskData.skipped !== undefined) countsHtml += `<span class="mr-3 inline-flex items-center"><span class="icon icon-skip text-yellow-600 mr-1"></span> Skipped: ${taskData.skipped}</span>`;
+
+            const message = taskData.message || `${taskData.status}...`;
+            const progress = taskData.progress || 0;
+
+            // Determine icon and behavior based on status
+            switch(taskData.status) {
+                case 'starting':
+                case 'running':
+                    iconClass = 'icon-loader'; iconColor = 'text-blue-500';
+                    html += `<div class="progress-bar-container my-1"><div class="progress-bar" style="width: ${progress}%"></div></div>`;
+                    html += `<p>${message}</p>`;
+                    if (countsHtml) html += `<p class="text-xs mt-1">${countsHtml}</p>`;
+                    cancelBtn.show().prop('disabled', false).data('taskId', currentTaskId); // Show and enable cancel button
+                    break;
+                case 'aborting': // Intermediate state after clicking cancel
+                     iconClass = 'icon-loader'; iconColor = 'text-yellow-600'; // Loader but yellow
+                     html += `<p>${message}</p>`;
+                     if (countsHtml) html += `<p class="text-xs mt-1">${countsHtml}</p>`;
+                     cancelBtn.show().prop('disabled', true); // Show but disable cancel button
+                     break;
+                 case 'aborted': // Final state after successful cancellation
+                     iconClass = 'icon-abort'; iconColor = 'text-yellow-600';
+                     html += `<p class="font-medium">Aborted:</p><p>${message}</p>`;
+                     if (countsHtml) html += `<p class="text-xs mt-1">${countsHtml}</p>`;
+                     cancelBtn.hide().prop('disabled', true); // Hide cancel button
+                     break;
+                case 'completed':
+                    iconClass = 'icon-check'; iconColor = 'text-green-500';
+                    html += `<p>${message}</p>`;
+                    if (countsHtml) html += `<p class="text-xs mt-1">${countsHtml}</p>`;
+                    cancelBtn.hide().prop('disabled', true); // Hide cancel button
+                    break;
+                case 'error':
+                    iconClass = 'icon-error'; iconColor = 'text-red-500';
+                    html += `<p class="text-red-600 font-medium">Error:</p><p>${message}</p>`;
+                    if (countsHtml) html += `<p class="text-xs mt-1">${countsHtml}</p>`;
+                    cancelBtn.hide().prop('disabled', true); // Hide cancel button
+                    break;
+                default: // Unknown or other statuses
+                     iconClass = 'icon-info'; iconColor = 'text-gray-500';
+                     html += `<p>${message}</p>`;
+                     cancelBtn.hide().prop('disabled', true); // Hide cancel button
+            }
+            // Inject the status content HTML into the dedicated element
+            statusElement.html(`<div class="flex items-start gap-2 ${iconColor}"><span class="icon ${iconClass} mt-1 flex-shrink-0"></span><div>${html}</div></div>`);
         }
-        $.ajax({
-          url: '/get_archive_files',
-          type: 'POST',
-          contentType: 'application/json',
-          data: JSON.stringify({ files: selectedFiles }),
-          dataType: 'json',
-          })
+
+        // --- API Polling Functions ---
+        function pollRemainingTime() {
+            $.getJSON('/remaining')
+                .done(data => $('#remaining').text(data.remaining || 'N/A'))
+                .fail(() => $('#remaining').text('Error'));
+        }
+
+        function pollStatus() {
+            $.getJSON('/status')
+                .done(function(data) {
+                    updateStatusIndicator('#extractIndicator', '#extractStatusText', data.extract);
+                    updateStatusIndicator('#transformIndicator', '#transformStatusText', data.transform);
+                    updateStatusIndicator('#loadIndicator', '#loadStatusText', data.load);
+                })
+                .fail(function() {
+                    console.error("Failed to poll pipeline phase status.");
+                    updateStatusIndicator('#extractIndicator', '#extractStatusText', 'error');
+                    updateStatusIndicator('#transformIndicator', '#transformStatusText', 'error');
+                    updateStatusIndicator('#loadIndicator', '#loadStatusText', 'error');
+                });
+        }
+
+        function pollMainLogs() {
+            $.getJSON('/logs/main')
+                .done(data => updateLogPanel('#logPanel', data.lines || []))
+                .fail(() => $('#logPanel').text('Error loading main process logs.'));
+        }
+
+         // --- Task Status Polling ---
+         function pollTaskStatus() {
+             let tasksToPoll = [];
+             // *** MODIFIED: Use the new CONTENT div IDs for statusElement ***
+             if (activePatchTaskId) tasksToPoll.push({
+                 id: activePatchTaskId,
+                 statusElement: '#patchTaskStatusContent', // Target content div
+                 titleIndicator: '#patchTitleIndicator',
+                 cancelBtn: '#cancelPatchBtn',
+                 startButton: '#startPatchBtn',
+                 storageKey: 'activePatchTaskId',
+                 clearFn: () => { activePatchTaskId = null; localStorage.removeItem('activePatchTaskId'); }
+             });
+             if (activeArchiveTaskId) tasksToPoll.push({
+                 id: activeArchiveTaskId,
+                 statusElement: '#archiveTaskStatusContent', // Target content div
+                 titleIndicator: '#archiveTitleIndicator',
+                 cancelBtn: '#cancelArchiveBtn',
+                 startButton: '#startArchiveBtn',
+                 storageKey: 'activeArchiveTaskId',
+                 clearFn: () => { activeArchiveTaskId = null; localStorage.removeItem('activeArchiveTaskId'); }
+             });
+
+             // Stop polling if no active tasks
+             if (tasksToPoll.length === 0) {
+                 if (taskPollingInterval) { clearInterval(taskPollingInterval); taskPollingInterval = null; }
+                 $('#startPatchBtn').prop('disabled', false);
+                 $('#startArchiveBtn').prop('disabled', false);
+                 // Ensure cancel buttons are explicitly hidden if polling stops
+                 $('#cancelPatchBtn').hide();
+                 $('#cancelArchiveBtn').hide();
+                 return;
+             }
+
+             // Disable start buttons for active tasks
+             $('#startPatchBtn').prop('disabled', !!activePatchTaskId);
+             $('#startArchiveBtn').prop('disabled', !!activeArchiveTaskId);
+
+             // Poll each active task
+             tasksToPoll.forEach(task => {
+                 $.getJSON(`/task/status/${task.id}`)
+                     .done(function(data) {
+                         // Call displayTaskStatus with the correct content element ID
+                         displayTaskStatus(task.statusElement, data, task.titleIndicator, task.cancelBtn, task.id);
+                         // If task reached a final state, clear its ID and re-enable start button
+                         if (['completed', 'error', 'aborted'].includes(data.status)) {
+                             task.clearFn(); // Clear active ID and local storage
+                             $(task.startButton).prop('disabled', false);
+                         } else if (data.status === 'running' || data.status === 'starting'){
+                            $(task.startButton).prop('disabled', true); // Ensure start button is disabled
+                         }
+                     })
+                     .fail(function(jqXHR) {
+                         console.error(`Failed to fetch status for task ${task.id}:`, jqXHR.statusText);
+                         const errorMsg = (jqXHR.status === 404) ? `Task ${task.id} not found (may have expired).` : `Failed to fetch status for task ${task.id}`;
+                         const errorData = { status: 'error', message: errorMsg };
+                         // Display error in the content div
+                         displayTaskStatus(task.statusElement, errorData, task.titleIndicator, task.cancelBtn, task.id);
+                         task.clearFn(); // Clear active ID as task is gone or errored
+                         $(task.startButton).prop('disabled', false); // Re-enable start button
+                     });
+             });
+         }
+
+        // --- Event Handlers ---
+        // statusElementId: ID of the PARENT status div (e.g., #patchTaskStatus)
+        function handleTaskStart(form, taskIdStorage, startBtnId, statusElementId, titleIndicatorId, cancelBtnId, endpoint) {
+             // *** MODIFIED: Derive content element ID ***
+             const contentElementId = statusElementId + 'Content'; // e.g., #patchTaskStatusContent
+             form.submit(function(e) {
+                 e.preventDefault();
+                 const currentTaskId = taskIdStorage === 'patch' ? activePatchTaskId : activeArchiveTaskId;
+                 if (currentTaskId) { console.warn('Task already running.'); return; } // Prevent multiple starts
+
+                 const formData = $(this).serialize();
+                 $(startBtnId).prop('disabled', true); // Disable start button immediately
+
+                 const initialData = { status: 'starting', message: 'Initializing task...' };
+                 // *** MODIFIED: Call displayTaskStatus with contentElementId ***
+                 displayTaskStatus(contentElementId, initialData, titleIndicatorId, cancelBtnId, null); // Show starting state
+
+                 $.post(endpoint, formData).done(function(response) {
+                     if (taskIdStorage === 'patch') {
+                         activePatchTaskId = response.task_id;
+                         localStorage.setItem('activePatchTaskId', activePatchTaskId); // Store in local storage
+                     } else {
+                         activeArchiveTaskId = response.task_id;
+                         localStorage.setItem('activeArchiveTaskId', activeArchiveTaskId);
+                     }
+
+                     const startData = { status: 'running', message: response.message || 'Task started...', progress: 0 };
+                     // *** MODIFIED: Call displayTaskStatus with contentElementId ***
+                     displayTaskStatus(contentElementId, startData, titleIndicatorId, cancelBtnId, response.task_id);
+
+                     // Start polling if not already running
+                     if (!taskPollingInterval) {
+                         pollTaskStatus(); // Poll immediately
+                         taskPollingInterval = setInterval(pollTaskStatus, TASK_POLL_INTERVAL_MS);
+                     }
+                 }).fail(function(jqXHR) {
+                     const errorMsg = jqXHR.responseJSON?.error || 'Failed to start task.';
+                     // *** MODIFIED: Call displayTaskStatus with contentElementId ***
+                     displayTaskStatus(contentElementId, { status: 'error', message: errorMsg }, titleIndicatorId, cancelBtnId, null);
+                     $(startBtnId).prop('disabled', false); // Re-enable start button on failure
+                 });
+             });
+         }
+
+        // statusElementId: ID of the PARENT status div (e.g., #patchTaskStatus)
+        function handleTaskCancel(cancelBtnId, statusElementId, titleIndicatorId) {
+            // *** MODIFIED: Derive content element ID ***
+            const contentElementId = statusElementId + 'Content'; // e.g., #patchTaskStatusContent
+            $(cancelBtnId).click(function() {
+                const taskId = $(this).data('taskId');
+                if (!taskId) { console.error("No task ID found for cancel button"); return; }
+
+                console.log(`Requesting cancellation for task: ${taskId}`);
+                $(this).prop('disabled', true); // Disable button immediately
+
+                 // *** MODIFIED: Call displayTaskStatus with contentElementId ***
+                 const abortingData = { status: 'aborting', message: 'Cancellation requested...' };
+                 displayTaskStatus(contentElementId, abortingData, titleIndicatorId, cancelBtnId, taskId);
+
+                $.post(`/task/cancel/${taskId}`)
+                    .done(function(response) {
+                        console.log(`Cancellation request for ${taskId} successful:`, response.message);
+                        // UI will update to 'aborted' state via the regular pollTaskStatus
+                    })
+                    .fail(function(jqXHR) {
+                        const errorMsg = jqXHR.responseJSON?.error || jqXHR.responseJSON?.message || `Failed to cancel task ${taskId}.`;
+                        console.error(`Cancellation request for ${taskId} failed:`, errorMsg);
+                        const errorData = { status: 'error', message: `Failed to send cancel signal: ${errorMsg}` };
+                        // *** MODIFIED: Call displayTaskStatus with contentElementId ***
+                        displayTaskStatus(contentElementId, errorData, titleIndicatorId, cancelBtnId, taskId);
+                        // Leave button disabled, polling should correct the state eventually
+                    });
+            });
+        }
+
+
+        // --- Initial Load & Interval Setup ---
+        $(document).ready(function() {
+            // Setup Forms - Pass the PARENT status div IDs here
+             handleTaskStart($('#patchForm'), 'patch', '#startPatchBtn', '#patchTaskStatus', '#patchTitleIndicator', '#cancelPatchBtn', '/patch/start');
+             handleTaskStart($('#archiveForm'), 'archive', '#startArchiveBtn', '#archiveTaskStatus', '#archiveTitleIndicator', '#cancelArchiveBtn', '/archive/start');
+
+             // Setup Cancel Buttons - Pass the PARENT status div IDs here
+             handleTaskCancel('#cancelPatchBtn', '#patchTaskStatus', '#patchTitleIndicator');
+             handleTaskCancel('#cancelArchiveBtn', '#archiveTaskStatus', '#archiveTitleIndicator');
+
+            // Initial Polls
+            pollRemainingTime();
+            pollStatus();
+            pollMainLogs();
+
+            // Check for existing tasks immediately and start polling if needed
+            pollTaskStatus(); // Initial call will now correctly target content divs
+            if (activePatchTaskId || activeArchiveTaskId) {
+                if (!taskPollingInterval) {
+                    taskPollingInterval = setInterval(pollTaskStatus, TASK_POLL_INTERVAL_MS);
+                }
+            }
+
+            // Setup Regular Polling Intervals
+            setInterval(pollRemainingTime, 10000); // Check remaining time less often
+            setInterval(pollStatus, 5000); // Check phase status regularly
+            setInterval(pollMainLogs, 5000); // Check main logs regularly
         });
     </script>
-    
-    <!-- Optional Bootstrap JS -->
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
-  </body>
+</body>
 </html>
