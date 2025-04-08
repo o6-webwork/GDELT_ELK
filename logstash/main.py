@@ -276,30 +276,26 @@ def move_json_to_ingest(file_path):
     else:
         write(f"Invalid file: {file_path} (Not a JSON file or file doesn't exist)",JSON_LOG_FILE)
 
-def query_elasticsearch_files():
+def es_client_setup():
     '''
-    Queries Elasticsearch for JSON files that have already been ingested by ELK pipeline.
-    :return: List containing all ingested JSON file names.
+    Sets up client to connect to Elasticsearch.
     '''
-    ca_cert_path = os.path.abspath("ca.crt")
-    es_host = "https://es01:9200"
-    es_username = "elastic"
-    es_password = "changeme"
-    es_index = "gkg"       
-
-    es = Elasticsearch(
-        es_host,
-        basic_auth=(es_username, es_password),
-        verify_certs=False,  # for dev
-        ca_certs=ca_cert_path
+    es_client = Elasticsearch(
+        f"https://es01:9200",
+        basic_auth=("elastic", "changeme"),
+        verify_certs=False, # Set to True if using trusted certs
+        request_timeout=30
     )
-    
-    query = {
-        "match_all": {}
-    }
+    return es_client
 
-    res = es.search(index=es_index, body=query, request_timeout=10)
-    return [doc["_source"]["filename"] for doc in res["hits"]["hits"]]
+def es_check_data(timestamp_str):
+    '''
+    Queries Elasticsearch to check if data for given timestamp exists.
+    '''
+    client = es_client_setup()
+    query_body = {"query": {"term": {"GkgRecordId.Date": timestamp_str}}}
+    response = client.count(index='gkg*', body=query_body, request_timeout=10)
+    return response.get('count', 0) > 0
 
 ################################################# Threading functions #################################################
 def process_downloaded_files():
@@ -322,8 +318,8 @@ def process_downloaded_files():
                 
                 # Checks for presence of ingestion files
                 json_file_name = file.replace(".gkg.csv", ".json")
-                json_files = query_elasticsearch_files()
-                if json_file_name in json_files:
+                timestamp_str = json_file_name.split(".")[0]
+                if es_check_data(timestamp_str):
                     write_all(f"Transformation skipped: {json_file_name} already exists")
 
                     # Removes the already processed file
@@ -359,7 +355,7 @@ def process_downloaded_files():
                 except Exception as e:
                     write(f"Error deleting Spark folder {json_folder}: {e}", JSON_LOG_FILE)
 
-                write(f"Loading JSON file into Elasticsearch: {json_file_name}")
+                write(f"Loading JSON file into Elasticsearch: {json_file_name}", JSON_LOG_FILE)
 
 def delete_processed_json():
     '''
@@ -369,11 +365,9 @@ def delete_processed_json():
     directory="./logstash_ingest_data/json"
 
     while True:
-        ingested_json_files = query_elasticsearch_files()
-
         for filename in os.listdir(directory):
-            if filename in ingested_json_files:
-                write(f"Loaded JSON file into Elasticsearch: {filename}")
+            if es_check_data(filename.split(".")[0]):
+                write(f"Loaded JSON file into Elasticsearch: {filename}", JSON_LOG_FILE)
                 file_path = os.path.join(directory, filename)
                 os.remove(file_path)
 
