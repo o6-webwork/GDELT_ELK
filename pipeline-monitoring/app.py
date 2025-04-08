@@ -6,15 +6,16 @@ from io import BytesIO
 from flask import Flask, render_template, jsonify, request
 import threading
 import pytz
+from elasticsearch import Elasticsearch
 
 app = Flask(__name__)
 
 # Path directories to visit
-log_file = os.environ.get("LOG_FILE_PATH", "./logs/log.txt")
-scraping_log_file = os.environ.get("SCRAPING_FILE_PATH", "./logs/scraping_log.txt")
-ingestion_log_file = os.environ.get("INGESTION_FILE_PATH", "./logs/ingestion_log.txt")
-timestamp_log_file = os.environ.get("TIMESTAMP_FILE_PATH", "./logs/timestamp_log.txt")
-download_folder = "./csv"
+LOG_FILE = os.environ.get("LOG_FILE_PATH", "./logs/log.txt")
+SCRAPING_LOG_FILE = os.environ.get("SCRAPING_FILE_PATH", "./logs/scraping_log.txt")
+INGESTION_LOG_FILE = os.environ.get("INGESTION_FILE_PATH", "./logs/ingestion_log.txt")
+TIMESTAMP_LOG_FILE = os.environ.get("TIMESTAMP_FILE_PATH", "./logs/timestamp_log.txt")
+DOWNLOAD_FOLDER = "./csv"
 
 #Additional parameters
 INTERVAL = 15 * 60 #15 minutes delay
@@ -32,7 +33,7 @@ def write(content):
     timezone = pytz.timezone("Asia/Singapore")
     current_time_gmt8 = datetime.datetime.now(timezone)
     current_time = current_time_gmt8.strftime("%Y-%m-%d %H:%M:%S") + ": "
-    with open(log_file, "a") as f:
+    with open(LOG_FILE, "a") as f:
         f.write(current_time + content + "\n")
 
 def displaying_logs(file_path, n=6):
@@ -47,7 +48,7 @@ def get_remaining_time():
     until the next run.
     """
     try:
-        with open(timestamp_log_file, "r") as f:
+        with open(TIMESTAMP_LOG_FILE, "r") as f:
             # Read the last non-empty line
             lines = [line.strip() for line in f if line.strip()]
             if not lines:
@@ -109,12 +110,17 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
         timestamp = current.strftime("%Y%m%d%H%M%S")
         file_url = f"{base_url}{timestamp}.gkg.csv.zip"
         local_filename = f"{timestamp}.gkg.csv"
+
+        # Checks for whether file has already been downloaded / processed
+        if local_filename in os.listdir(DOWNLOAD_FOLDER):
+            pass
+
         write(f"Extracting patching file: {local_filename}...")
         try:
             response = requests.get(file_url, stream=True, timeout=10)
             if response.status_code == 200:
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
-                zip_file.extract(local_filename, download_folder)
+                zip_file.extract(local_filename, DOWNLOAD_FOLDER)
                 num_files_success += 1
                 write(f"Extracting patching file completed: {local_filename}.")
             else:
@@ -162,7 +168,7 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
             response = requests.get(file_url, stream=True, timeout=10)
             if response.status_code == 200:
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
-                zip_file.extract(local_filename, download_folder)
+                zip_file.extract(local_filename, DOWNLOAD_FOLDER)
                 write(f"Extracting archive files completed: {local_filename}.")
                 num_files_success += 1
             else:
@@ -189,8 +195,8 @@ def dashboard():
     Loads the HTML dashboard page.
     Reads the log file and passes its content (as a list of lines) to the template.
     """
-    if os.path.exists(log_file):
-        with open(log_file, "r") as f:
+    if os.path.exists(LOG_FILE):
+        with open(LOG_FILE, "r") as f:
             data = f.read().split("\n")
     else:
         data = []
@@ -205,18 +211,18 @@ def remaining():
 
 @app.route('/logs')
 def get_logs():
-    logs = displaying_logs(log_file,500)
+    logs = displaying_logs(LOG_FILE, 500)
     logs = [line.rstrip() for line in logs]
     return jsonify({"lines": logs})
 
 @app.route('/scraping_logs', methods=['GET'])
 def displaying_scraping_logs():
-    scraping_logs = displaying_logs(scraping_log_file)
+    scraping_logs = displaying_logs(SCRAPING_LOG_FILE)
     return jsonify({"lines": scraping_logs})
 
 @app.route('/ingestion_logs', methods=['GET'])
 def displaying_ingestion_logs():
-    ingestion_logs = displaying_logs(ingestion_log_file)
+    ingestion_logs = displaying_logs(INGESTION_LOG_FILE)
     return jsonify({"lines": ingestion_logs})
 
 @app.route('/status', methods=['GET'])
@@ -225,8 +231,8 @@ def status():
     Reads the scraping and ingestion log files to determine pipeline statuses,
     and returns the statuses as JSON.
     """
-    scraping_status = get_pipeline_status("scraping", scraping_log_file)
-    ingestion_status = get_pipeline_status("ingestion", ingestion_log_file)
+    scraping_status = get_pipeline_status("scraping", SCRAPING_LOG_FILE)
+    ingestion_status = get_pipeline_status("ingestion", INGESTION_LOG_FILE)
     return jsonify({
         "scraping": scraping_status,
         "ingestion": ingestion_status
@@ -263,7 +269,7 @@ def get_archive_files():
     patch_status = patch_response.get_json().get("message", "")
     
     try:
-        all_files = os.listdir(download_folder)
+        all_files = os.listdir(DOWNLOAD_FOLDER)
     except Exception as e:
         return jsonify({"files": [], "error": str(e)})
     
