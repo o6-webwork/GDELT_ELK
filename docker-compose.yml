@@ -164,6 +164,12 @@ services:
       - logstash01:/app/logstash_ingest_data/json
       - logdata:/app/logs
       - csvfiles:/app/csv
+    depends_on:
+      es01:
+        condition: service_healthy
+
+    networks:
+      - elastic
 
   logstash01:
     depends_on:

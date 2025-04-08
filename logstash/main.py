@@ -14,8 +14,9 @@ from pyspark.sql.functions import col, concat_ws
 import glob
 import shutil
 import time, datetime, pytz
+from elasticsearch import Elasticsearch
 
-#Get download file link from web
+# Constants
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
 DOWNLOAD_FOLDER = "./csv"
 LOG_FILE = "./logs/log.txt"
@@ -33,6 +34,7 @@ for file in [LOG_FILE, SCRAPING_LOG_FILE, INGESTION_LOG_FILE, TIMESTAMP_LOG_FILE
     with open(file, "w") as f:
         f.write("")
 
+################################################# Functions for code #################################################
 def write(content, file):
     '''
     Logs messages to a text file, keeping only the first 500 lines of log text.
@@ -258,6 +260,48 @@ def run_pipeline(raw_file, json_output):
 
     spark.stop()
 
+def move_json_to_ingest(file_path):
+    '''
+    Moves the JSON file over to the json subfolder in logstash_ingest_data.
+    :param file_path: File path of target file to be shifted.
+    '''
+    os.makedirs(LOGSTASH_PATH, exist_ok=True)
+    
+    # Only copy the .json file
+    if os.path.isfile(file_path) and file_path.endswith(".json"):
+        # Get the filename from the full path and copy to the target directory
+        target_path = os.path.join(LOGSTASH_PATH, os.path.basename(file_path))
+        shutil.move(file_path, target_path)
+        write(f"Copied {file_path} to {target_path}",JSON_LOG_FILE)
+    else:
+        write(f"Invalid file: {file_path} (Not a JSON file or file doesn't exist)",JSON_LOG_FILE)
+
+def query_elasticsearch_files():
+    '''
+    Queries Elasticsearch for JSON files that have already been ingested by ELK pipeline.
+    :return: List containing all ingested JSON file names.
+    '''
+    ca_cert_path = os.path.abspath("ca.crt")
+    es_host = "https://es01:9200"
+    es_username = "elastic"
+    es_password = "changeme"
+    es_index = "gkg"       
+
+    es = Elasticsearch(
+        es_host,
+        basic_auth=(es_username, es_password),
+        verify_certs=False,  # for dev
+        ca_certs=ca_cert_path
+    )
+    
+    query = {
+        "match_all": {}
+    }
+
+    res = es.search(index=es_index, body=query, request_timeout=10)
+    return [doc["_source"]["filename"] for doc in res["hits"]["hits"]]
+
+################################################# Threading functions #################################################
 def process_downloaded_files():
     '''
     Process downloaded CSV files, converting them into JSON format,
@@ -277,10 +321,25 @@ def process_downloaded_files():
                 json_output_path = raw_file_path.replace(".csv", ".json")
                 
                 # Checks for presence of ingestion files
-                curr_file_name = file.replace(".csv", ".json")
-                json_files = os.listdir(LOGSTASH_PATH)
-                if curr_file_name in json_files:
-                    write_all(f"Transformation skipped: {curr_file_name} already exists")
+                json_file_name = file.replace(".gkg.csv", ".json")
+                json_files = query_elasticsearch_files()
+                if json_file_name in json_files:
+                    write_all(f"Transformation skipped: {json_file_name} already exists")
+
+                    # Removes the already processed file
+                    os.remove(raw_file_path)
+                    write(f"Deleted processed CSV file: {raw_file_path}", JSON_LOG_FILE)
+
+                    # Cleaning the corresponding JSON folder (if present)
+                    json_folder = file.split(".")[0] + ".gkg.json"
+                    json_folder_full = os.path.join(src_path, json_folder)
+                    if os.path.exists(json_folder_full):
+                        try:
+                            shutil.rmtree(json_folder_full)
+                            write(f"Deleted processed Spark folder: {json_folder}", JSON_LOG_FILE)
+                        except Exception as e:
+                            write(f"Error deleting Spark folder {json_folder}: {e}", JSON_LOG_FILE)
+
                     continue
 
                 write_all(f"Transforming file into JSON: {file}")
@@ -300,41 +359,23 @@ def process_downloaded_files():
                 except Exception as e:
                     write(f"Error deleting Spark folder {json_folder}: {e}", JSON_LOG_FILE)
 
-def move_json_to_ingest(file_path):
-    '''
-    Moves the JSON file over to the json subfolder in logstash_ingest_data.
-    :param file_path: File path of target file to be shifted.
-    '''
-    os.makedirs(LOGSTASH_PATH, exist_ok=True)
-    
-    # Only copy the .json file
-    if os.path.isfile(file_path) and file_path.endswith(".json"):
-        # Get the filename from the full path and copy to the target directory
-        target_path = os.path.join(LOGSTASH_PATH, os.path.basename(file_path))
-        shutil.move(file_path, target_path)
-        write(f"Copied {file_path} to {target_path}",JSON_LOG_FILE)
-    else:
-        write(f"Invalid file: {file_path} (Not a JSON file or file doesn't exist)",JSON_LOG_FILE)
+                write(f"Loading JSON file into Elasticsearch: {json_file_name}")
 
-def delete_old_json(directory="./logstash_ingest_data/json"):
+def delete_processed_json():
+    '''
+    Checks JSON folder constantly,
+    and deletes JSON files already ingested into Elasticsearch.
+    '''
+    directory="./logstash_ingest_data/json"
+
     while True:
-        # 1 week's leeway
-        age_threshold = 24 * 60 * 60 * 7
-        current_time = time.time()
+        ingested_json_files = query_elasticsearch_files()
 
-        # Cleaning JSON folders
         for filename in os.listdir(directory):
-            file_path = os.path.join(directory, filename)
-
-            # Check if it's a file
-            if file_path.endswith(".json") or file_path.endswith(".csv"):
-                    # Get the last modification time
-                    file_mod_time = os.path.getmtime(file_path)
-
-                    # Deletes file if it is older than 24 hours
-                    if (current_time - file_mod_time) > age_threshold:
-                        write_all(f"Deleting: {file_path}")
-                        os.remove(file_path)
+            if filename in ingested_json_files:
+                write(f"Loaded JSON file into Elasticsearch: {filename}")
+                file_path = os.path.join(directory, filename)
+                os.remove(file_path)
 
 def server_scrape():
     '''
@@ -365,7 +406,7 @@ def server_scrape():
 if __name__ == "__main__":
     thread1 = threading.Thread(target=server_scrape, daemon=True)
     thread2 = threading.Thread(target=process_downloaded_files, daemon=True)
-    thread3 = threading.Thread(target=delete_old_json, daemon=True)
+    thread3 = threading.Thread(target=delete_processed_json, daemon=True)
     
     thread1.start()
     thread2.start()
