@@ -28,80 +28,104 @@
   <div class="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
     <h1 class="text-3xl font-bold mb-6 text-gray-700">GDELT Pipeline Dashboard</h1>
 
-    <!-- Pipeline Phases Section -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-      <!-- Extract Phase Panel -->
-      <div class="bg-white p-4 rounded-lg shadow">
-        <h2 class="text-lg font-semibold mb-2 text-gray-600 flex items-center">
-          Extract Phase
-          <span id="extractIndicator" class="status-dot bg-gray-400 ml-2"></span>
-        </h2>
-        <p class="text-xs text-gray-500 mt-1">Scraping GDELT files</p>
-        <p class="text-xs text-gray-500 mt-2">Next scrape in: <span id="remainingExtract" class="font-medium">Loading...</span></p>
-      </div>
-      <!-- Transform Phase Panel -->
-      <div class="bg-white p-4 rounded-lg shadow">
-        <h2 class="text-lg font-semibold mb-2 text-gray-600 flex items-center">
-          Transform Phase
-          <span id="transformIndicator" class="status-dot bg-gray-400 ml-2"></span>
-        </h2>
-        <p class="text-xs text-gray-500 mt-1">Processing files with PySpark</p>
-      </div>
-      <!-- Load Phase Panel -->
-      <div class="bg-white p-4 rounded-lg shadow">
-        <h2 class="text-lg font-semibold mb-2 text-gray-600 flex items-center">
-          Load Phase
-          <span id="loadIndicator" class="status-dot bg-gray-400 ml-2"></span>
-        </h2>
-        <p class="text-xs text-gray-500 mt-1">Ingesting JSON via Logstash</p>
-      </div>
-    </div>
-
-    <!-- Manual Patching Section -->
-    <div class="bg-white p-6 rounded-lg shadow mb-6">
-      <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center">
-        <span>Patch Files</span>
-        <span id="patchTitleIndicator" class="ml-2 status-dot bg-gray-400"></span>
+    <!-- Top Panels Section: 2 x 2 Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <!-- Extract Phase Panel -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h2 class="text-lg font-semibold mb-2 text-gray-600 flex items-center">
+        Extract Phase
+        <span id="extractIndicator" class="status-dot bg-gray-400 ml-2"></span>
       </h2>
-      <form id="patchForm" class="flex flex-col sm:flex-row sm:items-end gap-4">
-        <div class="flex-grow">
-          <label for="lookBackDays" class="block text-sm font-medium text-gray-600 mb-1">Look Back Period (days):</label>
-          <input type="number" id="lookBackDays" name="look_back_days" class="w-full px-3 py-2 border border-gray-300 rounded-md" value="1" min="1">
-        </div>
-        <button type="submit" id="startPatchBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded whitespace-nowrap">Start Patching</button>
-      </form>
-      <div id="patchTaskStatus" class="mt-4 text-sm text-gray-600 min-h-[4em]"></div>
-      <!-- Progress bar for patching task -->
-      <div id="patchProgressContainer" class="mt-2 hidden">
-        <progress id="patchProgressBar" max="100" value="0" class="w-full"></progress>
-      </div>
-      <button id="cancelPatchBtn" class="mt-2 hidden bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs">Cancel</button>
+      <p class="text-xs text-gray-500 mt-1">Scraping GDELT files</p>
+      <p class="text-xs text-gray-500 mt-2">Next scrape in: <span id="remainingExtract" class="font-medium">Loading...</span></p>
     </div>
-
-    <!-- Targeted Archival Section -->
-    <div class="bg-white p-6 rounded-lg shadow mb-6">
-      <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center">
-        <span>Targeted Archival Extraction</span>
-        <span id="archiveTitleIndicator" class="ml-2 status-dot bg-gray-400"></span>
+    <!-- Transform Phase Panel -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h2 class="text-lg font-semibold mb-2 text-gray-600 flex items-center">
+        Transform Phase
+        <span id="transformIndicator" class="status-dot bg-gray-400 ml-2"></span>
       </h2>
-      <form id="archiveForm" class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-        <div>
-          <label for="startDate" class="block text-sm font-medium text-gray-600 mb-1">Start Date:</label>
-          <input type="date" id="startDate" name="start_date" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
-        </div>
-        <div>
-          <label for="endDate" class="block text-sm font-medium text-gray-600 mb-1">End Date:</label>
-          <input type="date" id="endDate" name="end_date" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
-        </div>
-        <button type="submit" id="startArchiveBtn" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded whitespace-nowrap">Download Archive</button>
-      </form>
-      <div id="archiveTaskStatus" class="mt-4 text-sm text-gray-600 min-h-[4em]"></div>
-      <!-- Progress bar for archive task -->
-      <div id="archiveProgressContainer" class="mt-2 hidden">
-        <progress id="archiveProgressBar" max="100" value="0" class="w-full"></progress>
-      </div>
-      <button id="cancelArchiveBtn" class="mt-2 hidden bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs">Cancel</button>
+      <p class="text-xs text-gray-500 mt-1">Processing files with PySpark</p>
     </div>
+    <!-- Load Phase Panel -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h2 class="text-lg font-semibold mb-2 text-gray-600 flex items-center">
+        Load Phase
+        <span id="loadIndicator" class="status-dot bg-gray-400 ml-2"></span>
+      </h2>
+      <p class="text-xs text-gray-500 mt-1">Ingesting JSON via Logstash</p>
+    </div>
+    <!-- File Counts Panel -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-xl font-semibold mb-4 text-gray-700">File Counts</h2>
+      <div class="text-sm text-gray-600">
+        <p>CSV Files: <span id="csvCount">0</span></p>
+        <p>JSON Files: <span id="jsonCount">0</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logs Panels Section: 2 x 1 Grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+    <!-- Scraping Logs Panel -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-xl font-semibold mb-4 text-gray-700">Scraping Logs</h2>
+      <pre id="scrapingLogsPanel" class="log-panel bg-gray-50 p-4 rounded-md border border-gray-200 h-40 overflow-y-scroll text-xs font-mono"></pre>
+    </div>
+    <!-- Ingestion Logs Panel -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-xl font-semibold mb-4 text-gray-700">Ingestion Logs</h2>
+      <pre id="ingestionLogsPanel" class="log-panel bg-gray-50 p-4 rounded-md border border-gray-200 h-40 overflow-y-scroll text-xs font-mono"></pre>
+    </div>
+  </div>
+
+    
+
+      <!-- Manual Patching Section -->
+  <div class="bg-white p-6 rounded-lg shadow mb-6">
+    <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center">
+      <span>Patch Files</span>
+      <span id="patchTitleIndicator" class="ml-2 status-dot bg-gray-400"></span>
+    </h2>
+    <form id="patchForm" class="flex flex-col sm:flex-row sm:items-end gap-4">
+      <div class="flex-grow">
+        <label for="lookBackDays" class="block text-sm font-medium text-gray-600 mb-1">Look Back Period (days):</label>
+        <input type="number" id="lookBackDays" name="look_back_days" class="w-full px-3 py-2 border border-gray-300 rounded-md" value="1" min="1">
+      </div>
+      <button type="submit" id="startPatchBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded whitespace-nowrap">Start Patching</button>
+    </form>
+    <div id="patchTaskStatus" class="mt-4 text-sm text-gray-600 min-h-[4em]"></div>
+    <!-- New flex container for progress bar and Cancel button -->
+    <div id="patchProgressWrapper" class="mt-2 hidden flex items-center gap-4">
+      <progress id="patchProgressBar" max="100" value="0" class="w-full"></progress>
+      <button id="cancelPatchBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs">Cancel</button>
+    </div>
+  </div>
+
+      <!-- Targeted Archival Section -->
+  <div class="bg-white p-6 rounded-lg shadow mb-6">
+    <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center">
+      <span>Targeted Archival Extraction</span>
+      <span id="archiveTitleIndicator" class="ml-2 status-dot bg-gray-400"></span>
+    </h2>
+    <form id="archiveForm" class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+      <div>
+        <label for="startDate" class="block text-sm font-medium text-gray-600 mb-1">Start Date:</label>
+        <input type="date" id="startDate" name="start_date" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+      </div>
+      <div>
+        <label for="endDate" class="block text-sm font-medium text-gray-600 mb-1">End Date:</label>
+        <input type="date" id="endDate" name="end_date" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+      </div>
+      <button type="submit" id="startArchiveBtn" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded whitespace-nowrap">Download Archive</button>
+    </form>
+    <div id="archiveTaskStatus" class="mt-4 text-sm text-gray-600 min-h-[4em]"></div>
+    <!-- New flex container for archive progress bar and Cancel button -->
+    <div id="archiveProgressWrapper" class="mt-2 hidden flex items-center gap-4">
+      <progress id="archiveProgressBar" max="100" value="0" class="w-full"></progress>
+      <button id="cancelArchiveBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs">Cancel</button>
+    </div>
+  </div>
 
     <!-- Main Process Logs -->
     <div class="bg-white p-6 rounded-lg shadow mb-6">
@@ -172,6 +196,57 @@
     setInterval(updateLogs, 2000);
     updateLogs();
 
+    // Function to update scraping logs every 2 seconds
+    function updateScrapingLogs() {
+      $.getJSON('/scraping_logs')
+        .done(function(data) {
+          if (data && data.lines && Array.isArray(data.lines)) {
+            $('#scrapingLogsPanel').text(data.lines.join("\n"));
+          } else {
+            $('#scrapingLogsPanel').text("No scraping logs available");
+          }
+        })
+        .fail(function() {
+          $('#scrapingLogsPanel').text("Error loading scraping logs");
+        });
+    }
+    setInterval(updateScrapingLogs, 2000);
+    updateScrapingLogs();
+
+    // Function to update ingestion logs every 2 seconds
+    function updateIngestionLogs() {
+      $.getJSON('/ingestion_logs')
+        .done(function(data) {
+          if (data && data.lines && Array.isArray(data.lines)) {
+            $('#ingestionLogsPanel').text(data.lines.join("\n"));
+          } else {
+            $('#ingestionLogsPanel').text("No ingestion logs available");
+          }
+        })
+        .fail(function() {
+          $('#ingestionLogsPanel').text("Error loading ingestion logs");
+        });
+    }
+    setInterval(updateIngestionLogs, 2000);
+    updateIngestionLogs();
+
+
+    // Function to update the file counts panel every 2 seconds
+    function updateFileCounts() {
+      $.getJSON('/file_counts')
+        .done(function(data) {
+          $('#csvCount').text(data.csv_count);
+          $('#jsonCount').text(data.json_count);
+        })
+        .fail(function() {
+          $('#csvCount').text("Error");
+          $('#jsonCount').text("Error");
+        });
+    }
+    setInterval(updateFileCounts, 2000);
+    updateFileCounts();
+
+
     // --- Progress polling for Patch Task ---
     let patchInterval = null;
     function startPatchProgressPolling() {
@@ -220,7 +295,7 @@
       var formData = $(this).serialize();
       $('#startPatchBtn').prop('disabled', true);
       $('#cancelPatchBtn').removeClass('hidden');
-      $('#patchProgressContainer').removeClass('hidden');
+      $('#patchProgressWrapper').removeClass('hidden');
       $.post('/patching', formData)
         .done(function(response) {
           startPatchProgressPolling();
@@ -237,7 +312,7 @@
       var formData = $(this).serialize();
       $('#startArchiveBtn').prop('disabled', true);
       $('#cancelArchiveBtn').removeClass('hidden');
-      $('#archiveProgressContainer').removeClass('hidden');
+      $('#archiveProgressWrapper').removeClass('hidden');
       $.post('/archive', formData)
         .done(function(response) {
           startArchiveProgressPolling();

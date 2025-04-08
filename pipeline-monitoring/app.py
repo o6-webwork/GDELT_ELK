@@ -15,6 +15,7 @@ LOG_FILE = os.environ.get("LOG_FILE_PATH", "./logs/log.txt")
 SCRAPING_LOG_FILE = os.environ.get("SCRAPING_FILE_PATH", "./logs/scraping_log.txt")
 INGESTION_LOG_FILE = os.environ.get("INGESTION_FILE_PATH", "./logs/ingestion_log.txt")
 TIMESTAMP_LOG_FILE = os.environ.get("TIMESTAMP_FILE_PATH", "./logs/timestamp_log.txt")
+JSON_LOG_FILE = os.environ.get("JSON_FILE_PATH", "./logs/json_log.txt")
 DOWNLOAD_FOLDER = "./csv"
 
 INTERVAL = 15 * 60  # 15 minutes delay
@@ -75,20 +76,20 @@ def get_remaining_time():
 def get_pipeline_status(pipeline, respective_log_file):
     """
     Determines the pipeline status by parsing the provided log file.
-    Returns 'running', 'error', or 'idle'.
+    Returns 'running' or 'error'.
     """
-    status = "idle"
-    if not os.path.exists(respective_log_file):
-        return status
 
     with open(respective_log_file, "r") as f:
-        for line in f:
-            if pipeline.lower() in line.lower():
-                lower_line = line.lower()
-                if "error" in lower_line:
-                    status = "error"
-                else:
-                    status = "running"
+        # Read all non-empty lines, then take the last 5
+        lines = [line.strip() for line in f if line.strip()]
+    last_lines = lines[-5:]
+
+    for line in last_lines:
+        if "error" in line.lower():
+            return "error"
+        # Mark as running if the pipeline keyword appears without error
+        status = "running"
+
     return status
 
 def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdeltv2/"):
@@ -155,8 +156,8 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
 
     write(f"Patching files from {look_back_days} days ago completed.")
     msg = f'''Number of patching files extracted: {num_files_success}
-Number of patching file errors: {num_files_error}
-Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
+                     Number of patching file errors: {num_files_error}
+                     Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
     write(msg)
     patching_progress["message"] = "Patching task completed."
     patching_progress["percent"] = 100
@@ -229,10 +230,10 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
 
     write(f"Patching files from {start_date_str} to {end_date_str} completed.")
     msg = f'''Number of archive files extracted: {num_files_success}
-Number of archive file errors: {num_files_error}
-Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
+                     Number of archive file errors: {num_files_error}
+                     Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
     write(msg)
-    archive_progress["message"] = "Archive download task completed."
+    archive_progress["message"] = "Targeted archival extraction completed."
     archive_progress["percent"] = 100
 
 ############################ Flask Routes ############################
@@ -274,12 +275,24 @@ def status():
     # Note: the extract, transform, and load statuses are determined by log files.
     # For brevity, these remain unchanged.
     scraping_status = get_pipeline_status("scraping", SCRAPING_LOG_FILE)
+    transform_status = get_pipeline_status("transform", JSON_LOG_FILE)
     ingestion_status = get_pipeline_status("ingestion", INGESTION_LOG_FILE)
     return jsonify({
         "extract": scraping_status,
-        "transform": "idle",
+        "transform": transform_status,
         "load": ingestion_status
     })
+
+#Counter for CSV and JSON files in the download folder
+@app.route('/file_counts', methods=['GET'])
+def file_counts():
+    try:
+        files = os.listdir(DOWNLOAD_FOLDER)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    csv_count = sum(1 for f in files if f.lower().endswith(".csv"))
+    json_count = sum(1 for f in files if f.lower().endswith(".json"))
+    return jsonify({"csv_count": csv_count, "json_count": json_count})
 
 # Start patching task in background thread
 @app.route('/patching', methods=['POST'])
