@@ -6,7 +6,6 @@ from io import BytesIO
 from flask import Flask, render_template, jsonify, request
 import threading
 import pytz
-from elasticsearch import Elasticsearch
 
 app = Flask(__name__)
 
@@ -115,6 +114,7 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
         # Checks for whether file has already been downloaded / processed
         if local_filename in os.listdir(DOWNLOAD_FOLDER):
             write(f"Extraction skipped: {local_filename} already exists.")
+            current += datetime.timedelta(minutes=15)
             continue
 
         write(f"Extracting patching file: {local_filename}...")
@@ -169,6 +169,7 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
         # Checks for whether file has already been downloaded / processed
         if local_filename in os.listdir(DOWNLOAD_FOLDER):
             write(f"Extraction skipped: {local_filename} already exists.")
+            current += datetime.timedelta(minutes=15)
             continue
 
         write(f"Extracting archive files: {local_filename}...")
