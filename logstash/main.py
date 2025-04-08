@@ -81,10 +81,13 @@ def download_and_extract(url):
     zip_file = zipfile.ZipFile(BytesIO(response.content))
     
     for file in zip_file.namelist():
-        if file.lower().endswith("gkg.csv"):
-            write_all(f"Extracting latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
-            zip_file.extract(file, DOWNLOAD_FOLDER)
-            write_all(f"Extracted latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
+        if file not in os.listdir(DOWNLOAD_FOLDER):
+            if file.lower().endswith("gkg.csv"):
+                write_all(f"Extracting latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
+                zip_file.extract(file, DOWNLOAD_FOLDER)
+                write_all(f"Extracted latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
+        else: write_all(f"Extraction skipped: {file} already exists.")
+
 
 def run_pipeline(raw_file, json_output):
     """

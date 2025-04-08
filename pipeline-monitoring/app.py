@@ -106,6 +106,7 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
         start = start - datetime.timedelta(minutes=start_adjust)
     current = start
     write(f"Patching files from {look_back_days} days ago...")
+
     while current <= now:
         timestamp = current.strftime("%Y%m%d%H%M%S")
         file_url = f"{base_url}{timestamp}.gkg.csv.zip"
@@ -113,7 +114,8 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
 
         # Checks for whether file has already been downloaded / processed
         if local_filename in os.listdir(DOWNLOAD_FOLDER):
-            pass
+            write(f"Extraction skipped: {local_filename} already exists.")
+            continue
 
         write(f"Extracting patching file: {local_filename}...")
         try:
@@ -157,11 +159,18 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
         start = start - datetime.timedelta(minutes=start_adjust)
     current = start
     write(f"Patching files from {start_date_str} to {end_date_str}...")
+    
     while current <= end:
         # Create a timestamp string: YYYYMMDDHHMMSS (seconds always "00")
         timestamp = current.strftime("%Y%m%d%H%M%S")
         file_url = f"{base_url}{timestamp}.gkg.csv.zip"
         local_filename = f"{timestamp}.gkg.csv"
+
+        # Checks for whether file has already been downloaded / processed
+        if local_filename in os.listdir(DOWNLOAD_FOLDER):
+            write(f"Extraction skipped: {local_filename} already exists.")
+            continue
+
         write(f"Extracting archive files: {local_filename}...")
         
         try:
