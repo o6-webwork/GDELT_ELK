@@ -6,25 +6,35 @@ from io import BytesIO
 from flask import Flask, render_template, jsonify, request
 import threading
 import pytz
+from elasticsearch import Elasticsearch  # Currently not used
 
 app = Flask(__name__)
 
-# Path directories to visit
+# Path directories and additional parameters
 LOG_FILE = os.environ.get("LOG_FILE_PATH", "./logs/log.txt")
 SCRAPING_LOG_FILE = os.environ.get("SCRAPING_FILE_PATH", "./logs/scraping_log.txt")
 INGESTION_LOG_FILE = os.environ.get("INGESTION_FILE_PATH", "./logs/ingestion_log.txt")
 TIMESTAMP_LOG_FILE = os.environ.get("TIMESTAMP_FILE_PATH", "./logs/timestamp_log.txt")
 DOWNLOAD_FOLDER = "./csv"
 
-#Additional parameters
-INTERVAL = 15 * 60 #15 minutes delay
+INTERVAL = 15 * 60  # 15 minutes delay
+
+# Global variables for background tasks and cancellation events
+patching_thread = None
+patching_cancel_event = threading.Event()
+
+archive_thread = None
+archive_cancel_event = threading.Event()
+
+# Global progress trackers for tasks
+patching_progress = {"percent": 0, "message": ""}
+archive_progress = {"percent": 0, "message": ""}
 
 ############################ Helper Functions ############################
 
 def write(content):
     """
-    Write log data into the log file.
-    Note: This uses a static timestamp; consider updating to get the current time each call.
+    Append log data into the log file with a current timestamp (Asia/Singapore).
     """
     if not content:
         return
@@ -42,40 +52,30 @@ def displaying_logs(file_path, n=6):
 
 def get_remaining_time():
     """
-    Reads the log file to get the latest timestamp,
-    then calculates and returns the remaining time (in seconds)
-    until the next run.
+    Reads the TIMESTAMP_LOG_FILE to get the latest run timestamp,
+    then calculates and returns the remaining time until the next run.
     """
     try:
         with open(TIMESTAMP_LOG_FILE, "r") as f:
             # Read the last non-empty line
             lines = [line.strip() for line in f if line.strip()]
             if not lines:
-                return None  # or handle as needed
-            last_timestamp = lines[-1]
-            # Remove any trailing colon
-            last_timestamp = last_timestamp.rstrip(':')
-            
-            # Parse the last timestamp into a datetime object
+                return None
+            last_timestamp = lines[-1].rstrip(':')
             last_run_dt = datetime.datetime.strptime(last_timestamp, "%Y-%m-%d %H:%M:%S")
-            # Calculate the next scheduled run time
             next_run_dt = last_run_dt + datetime.timedelta(seconds=INTERVAL)
-            now_dt =  datetime.datetime.now() + datetime.timedelta(hours=8)
-            
-            # Calculate remaining seconds (ensure it's not negative)
+            now_dt = datetime.datetime.now() + datetime.timedelta(hours=8)
             remaining_seconds = max(0, int((next_run_dt - now_dt).total_seconds()))
-            # Convert seconds to minutes and seconds
             minutes, seconds = divmod(remaining_seconds, 60)
-            
             return f"{minutes} min {seconds} sec"
     except Exception as e:
         print(f"Error reading log file: {e}")
         return None
-    
+
 def get_pipeline_status(pipeline, respective_log_file):
     """
-    Parse the log file to determine the status of the given pipeline.
-    Returns 'running', 'error', or 'idle' based on the log entries.
+    Determines the pipeline status by parsing the provided log file.
+    Returns 'running', 'error', or 'idle'.
     """
     status = "idle"
     if not os.path.exists(respective_log_file):
@@ -94,8 +94,10 @@ def get_pipeline_status(pipeline, respective_log_file):
 def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdeltv2/"):
     """
     Downloads CSV files from the GDELT archive based on a look-back period.
-    Files are expected at 15-minute intervals.
+    Checks for cancellation at each 15-minute interval.
+    Updates patching_progress with the percent complete.
     """
+    global patching_progress
     num_files_success, num_files_error = 0, 0
     now = datetime.datetime.now()
     start = now - datetime.timedelta(days=int(look_back_days))
@@ -105,19 +107,34 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
         start = start - datetime.timedelta(minutes=start_adjust)
     current = start
     write(f"Patching files from {look_back_days} days ago...")
+    
+    # Reset progress and cancellation flag at start
+    patching_progress = {"percent": 0, "message": "Task started..."}
+    patching_cancel_event.clear()
+    total_steps = int((now - start).total_seconds() / (15*60)) + 1
+    step_count = 0
 
     while current <= now:
+        # If cancellation has been requested, log and update progress then exit the loop.
+        if patching_cancel_event.is_set():
+            write("Patching task cancelled by user.")
+            patching_progress["message"] = "Patching task cancelled."
+            break
+
         timestamp = current.strftime("%Y%m%d%H%M%S")
-        file_url = f"{base_url}{timestamp}.gkg.csv.zip"
         local_filename = f"{timestamp}.gkg.csv"
 
-        # Checks for whether file has already been downloaded / processed
+        # Check if file has already been downloaded/processed
         if local_filename in os.listdir(DOWNLOAD_FOLDER):
             write(f"Extraction skipped: {local_filename} already exists.")
             current += datetime.timedelta(minutes=15)
+            step_count += 1
+            patching_progress["percent"] = int((step_count / total_steps) * 100)
+            patching_progress["message"] = f"Skipped {step_count} of {total_steps} files ({patching_progress['percent']}%)."
             continue
 
         write(f"Extracting patching file: {local_filename}...")
+        file_url = f"{base_url}{timestamp}.gkg.csv.zip"
         try:
             response = requests.get(file_url, stream=True, timeout=10)
             if response.status_code == 200:
@@ -127,22 +144,30 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
                 write(f"Extracting patching file completed: {local_filename}.")
             else:
                 write(f"Patching error {response.status_code} for URL: {file_url}")
+                num_files_error += 1
         except Exception as e:
             num_files_error += 1
             write(f"Error extracting patching file {local_filename}: {e}")
         current += datetime.timedelta(minutes=15)
+        step_count += 1
+        patching_progress["percent"] = int((step_count / total_steps) * 100)
+        patching_progress["message"] = f"Processing file {step_count} of {total_steps} ({patching_progress['percent']}%)."
+
     write(f"Patching files from {look_back_days} days ago completed.")
     msg = f'''Number of patching files extracted: {num_files_success}
-                    Number of patching file errors: {num_files_error}
-                    Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
+Number of patching file errors: {num_files_error}
+Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
     write(msg)
+    patching_progress["message"] = "Patching task completed."
+    patching_progress["percent"] = 100
 
 def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdeltproject.org/gdeltv2/"):
     """
     Downloads CSV files from the GDELT archive within a custom date range.
-    Expects start_date_str and end_date_str in the format "YYYY-MM-DD".
-    Files are expected at 15-minute intervals.
+    Checks for cancellation requests during the download process.
+    Updates archive_progress with the percent complete.
     """
+    global archive_progress
     num_files_success, num_files_error = 0, 0
     try:
         start = datetime.datetime.strptime(start_date_str, "%Y-%m-%d")
@@ -150,9 +175,9 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
         end = end + datetime.timedelta(days=1) - datetime.timedelta(microseconds=1)
     except Exception as e:
         write(f"Error parsing dates: {e}")
-        return jsonify({"message": "Invalid date format."})
-    
-    # Ensure start time is aligned: reset seconds/microseconds and round minutes down to nearest 15
+        archive_progress["message"] = "Error parsing dates."
+        return
+
     start = start.replace(second=0, microsecond=0)
     start_adjust = start.minute % 15
     if start_adjust != 0:
@@ -160,51 +185,60 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
     current = start
     write(f"Patching files from {start_date_str} to {end_date_str}...")
     
-    while current <= end:
-        # Create a timestamp string: YYYYMMDDHHMMSS (seconds always "00")
-        timestamp = current.strftime("%Y%m%d%H%M%S")
-        file_url = f"{base_url}{timestamp}.gkg.csv.zip"
-        local_filename = f"{timestamp}.gkg.csv"
+    # Reset progress and cancellation flag at start
+    archive_progress = {"percent": 0, "message": "Task started..."}
+    archive_cancel_event.clear()
+    total_steps = int((end - start).total_seconds() / (15*60)) + 1
+    step_count = 0
 
-        # Checks for whether file has already been downloaded / processed
+    while current <= end:
+        if archive_cancel_event.is_set():
+            write("Archive download task cancelled by user.")
+            archive_progress["message"] = "Archive download task cancelled."
+            break
+
+        timestamp = current.strftime("%Y%m%d%H%M%S")
+        local_filename = f"{timestamp}.gkg.csv"
         if local_filename in os.listdir(DOWNLOAD_FOLDER):
             write(f"Extraction skipped: {local_filename} already exists.")
             current += datetime.timedelta(minutes=15)
+            step_count += 1
+            archive_progress["percent"] = int((step_count / total_steps) * 100)
+            archive_progress["message"] = f"Skipped {step_count} of {total_steps} files ({archive_progress['percent']}%)."
             continue
 
-        write(f"Extracting archive files: {local_filename}...")
-        
+        write(f"Extracting archive file: {local_filename}...")
+        file_url = f"{base_url}{timestamp}.gkg.csv.zip"
         try:
             response = requests.get(file_url, stream=True, timeout=10)
             if response.status_code == 200:
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
                 zip_file.extract(local_filename, DOWNLOAD_FOLDER)
-                write(f"Extracting archive files completed: {local_filename}.")
+                write(f"Extracting archive file completed: {local_filename}.")
                 num_files_success += 1
             else:
                 write(f"Archival download error {response.status_code} for URL: {file_url}")
                 num_files_error += 1
         except Exception as e:
-            write(f"Error extracting archive files {local_filename}: {e}")
+            write(f"Error extracting archive file {local_filename}: {e}")
             num_files_error += 1
-        
         current += datetime.timedelta(minutes=15)
-    
+        step_count += 1
+        archive_progress["percent"] = int((step_count / total_steps) * 100)
+        archive_progress["message"] = f"Processing file {step_count} of {total_steps} ({archive_progress['percent']}%)."
+
     write(f"Patching files from {start_date_str} to {end_date_str} completed.")
     msg = f'''Number of archive files extracted: {num_files_success}
-                    Number of archive file errors: {num_files_error}
-                    Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
+Number of archive file errors: {num_files_error}
+Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
     write(msg)
-    return jsonify({"message": f"Targeted ingestion download from {start_date_str} to {end_date_str} completed."})
+    archive_progress["message"] = "Archive download task completed."
+    archive_progress["percent"] = 100
 
 ############################ Flask Routes ############################
 
 @app.route('/')
 def dashboard():
-    """
-    Loads the HTML dashboard page.
-    Reads the log file and passes its content (as a list of lines) to the template.
-    """
     if os.path.exists(LOG_FILE):
         with open(LOG_FILE, "r") as f:
             data = f.read().split("\n")
@@ -237,47 +271,72 @@ def displaying_ingestion_logs():
 
 @app.route('/status', methods=['GET'])
 def status():
-    """
-    Reads the scraping and ingestion log files to determine pipeline statuses,
-    and returns the statuses as JSON.
-    """
+    # Note: the extract, transform, and load statuses are determined by log files.
+    # For brevity, these remain unchanged.
     scraping_status = get_pipeline_status("scraping", SCRAPING_LOG_FILE)
     ingestion_status = get_pipeline_status("ingestion", INGESTION_LOG_FILE)
     return jsonify({
-        "scraping": scraping_status,
-        "ingestion": ingestion_status
+        "extract": scraping_status,
+        "transform": "idle",
+        "load": ingestion_status
     })
 
+# Start patching task in background thread
 @app.route('/patching', methods=['POST'])
 def patch_missing():
-    """
-    Starts a background thread to patch missing files.
-    """
     look_back_days = request.form.get("look_back_days", 3)
-    threading.Thread(target=patching_task, args=(look_back_days,)).start()
-    return jsonify({"message": "Patching started", "look_back_days": look_back_days})
+    global patching_thread, patching_cancel_event, patching_progress
+    patching_cancel_event.clear()  # Reset any previous cancellation
+    # Reset progress before starting the task
+    patching_progress = {"percent": 0, "message": "Task started..."}
+    patching_thread = threading.Thread(target=patching_task, args=(look_back_days,))
+    patching_thread.start()
+    return jsonify({"status":"running", "message": "Patching started", "look_back_days": look_back_days})
+
+# Cancel the patching task
+@app.route('/patch_cancel', methods=['POST'])
+def patch_cancel():
+    global patching_cancel_event
+    patching_cancel_event.set()
+    return jsonify({"message": "Patching cancellation initiated."})
+
+# Start archival download task in background thread
+@app.route('/archive', methods=['POST'])
+def archive_download():
+    start_date = request.form.get('start_date')
+    end_date = request.form.get('end_date')
+    try:
+        datetime.datetime.strptime(start_date, "%Y-%m-%d")
+        datetime.datetime.strptime(end_date, "%Y-%m-%d")
+    except Exception as e:
+        return jsonify({"error": "Invalid date format."})
+    global archive_thread, archive_cancel_event, archive_progress
+    archive_cancel_event.clear()  # Reset any previous cancellation
+    archive_progress = {"percent": 0, "message": "Task started..."}
+    archive_thread = threading.Thread(target=patching_task_range, args=(start_date, end_date))
+    archive_thread.start()
+    return jsonify({"message": "Archive download started", "start_date": start_date, "end_date": end_date})
+
+# Cancel the archival download task
+@app.route('/archive_cancel', methods=['POST'])
+def archive_cancel():
+    global archive_cancel_event
+    archive_cancel_event.set()
+    return jsonify({"message": "Archive download cancellation initiated."})
 
 @app.route('/get_archive_files', methods=['POST'])
 def get_archive_files():
     """
-    Uses the patching_task_range function to download files within a custom date range,
-    then returns a list of available archive files (downloaded to the download folder) 
-    along with the patching status message.
-    Expects 'start_date' and 'end_date' (format: YYYY-MM-DD) from the form.
+    For compatibility with the previous implementation,
+    this route now only lists downloaded files after the archive task runs.
     """
     start_date = request.form.get('start_date')
     end_date = request.form.get('end_date')
     try:
-        # Validate date format
         datetime.datetime.strptime(start_date, "%Y-%m-%d")
         datetime.datetime.strptime(end_date, "%Y-%m-%d")
     except Exception as e:
         return jsonify({"files": [], "error": "Invalid date format."})
-    
-    # Call patching_task_range synchronously to download files for the given range.
-    patch_response = patching_task_range(start_date, end_date)
-    patch_status = patch_response.get_json().get("message", "")
-    
     try:
         all_files = os.listdir(DOWNLOAD_FOLDER)
     except Exception as e:
@@ -287,8 +346,7 @@ def get_archive_files():
     start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
     end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d")
     end_dt = end_dt + datetime.timedelta(days=1) - datetime.timedelta(microseconds=1)
-
-    # Look for files named like "YYYYMMDDHHMMSS.gkg.csv"
+    
     for f in all_files:
         try:
             file_date = datetime.datetime.strptime(f[:8], "%Y%m%d")
@@ -297,7 +355,17 @@ def get_archive_files():
         except Exception:
             continue
     
-    return jsonify({"files": available_files, "patch_status": patch_status})
+    return jsonify({"files": available_files})
+
+# New endpoints for progress tracking
+
+@app.route('/patch_progress', methods=['GET'])
+def patch_progress_endpoint():
+    return jsonify(patching_progress)
+
+@app.route('/archive_progress', methods=['GET'])
+def archive_progress_endpoint():
+    return jsonify(archive_progress)
 
 ############################ Main ############################
 

@@ -1,322 +1,274 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <title>Dashboard</title>
-    <!-- Bootstrap CSS for styling -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <!-- jQuery for AJAX calls -->
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <style>
-      /* Style for the circular status indicator */
-      .status-indicator {
-        height: 20px;
-        width: 20px;
-        display: inline-block;
-        border-radius: 50%;
-      }
-      /* Log panel styling */
-      .log-panel {
-        background: #f8f8f8;
-        border: 1px solid #ddd;
-        padding: 10px;
-        height: 300px;
-        overflow-y: scroll;
-        white-space: pre-wrap;
-        font-family: monospace;
-      }
-      /* Scraping and Ingestion log container styling */ 
-      .log-container {
-        background: #f8f8f8;
-        border: 1px solid #ccc;
-        padding: 15px;
-        font-family: monospace;
-        height: 350px;
-        white-space: pre-wrap;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container mt-4">
-      <h1>Dashboard</h1>
-      <div class="row">
-        <!-- Scraping Pipeline Panel -->
-        <div class="col-md-6 mb-3">
-          <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <div>
-                Scraping Pipeline
-                <span id="scrapingIndicator" class="status-indicator bg-secondary ml-2"></span>
-              </div>
-              <div>
-                Scraping again in: <span id="remaining">Loading...</span>
-              </div>
-            </div>
-            <div id="scrapingLogCollapse" class="collapse show">
-              <div class="card-body">
-                <div id="scrapingLog" class="log-container"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Ingestion Pipeline Panel -->
-        <div class="col-md-6 mb-3">
-          <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <div>
-                Ingestion Pipeline
-                <span id="ingestionIndicator" class="status-indicator bg-secondary ml-2"></span>
-              </div>
-              
-            </div>
-            <div id="ingestionLogCollapse" class="collapse show">
-              <div class="card-body">
-                <div id="ingestionLog" class="log-container"></div>
-              </div>
-            </div>
-          </div>
-        </div>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GDELT Pipeline Dashboard</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Inter font from rsms -->
+  <link rel="preconnect" href="https://rsms.me/">
+  <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+  <!-- jQuery for AJAX calls -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    /* Custom scrollbar for log panels */
+    .log-panel::-webkit-scrollbar { width: 8px; }
+    .log-panel::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+    .log-panel::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+    .log-panel::-webkit-scrollbar-thumb:hover { background: #555; }
+    /* Basic status dot styling */
+    .status-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      display: inline-block; vertical-align: middle;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800">
+  <div class="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
+    <h1 class="text-3xl font-bold mb-6 text-gray-700">GDELT Pipeline Dashboard</h1>
+
+    <!-- Pipeline Phases Section -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <!-- Extract Phase Panel -->
+      <div class="bg-white p-4 rounded-lg shadow">
+        <h2 class="text-lg font-semibold mb-2 text-gray-600 flex items-center">
+          Extract Phase
+          <span id="extractIndicator" class="status-dot bg-gray-400 ml-2"></span>
+        </h2>
+        <p class="text-xs text-gray-500 mt-1">Scraping GDELT files</p>
+        <p class="text-xs text-gray-500 mt-2">Next scrape in: <span id="remainingExtract" class="font-medium">Loading...</span></p>
       </div>
-      
-      <!-- Patching Files Section -->
-      <div class="container mt-4">
-        <div class="row">
-          <div class="col-md-12">
-            <div class="card">
-              <div class="card-header">Patching Files</div>
-              <div class="card-body">
-                <form id="patchForm">
-                  <div class="form-row align-items-end">
-                    <div class="col-auto">
-                      <label for="lookBackDays">Look Back Period (days):</label>
-                      <input type="number" 
-                             id="lookBackDays" 
-                             name="look_back_days" 
-                             class="form-control" 
-                             value="1" 
-                             min="1" 
-                             style="width:400px;">
-                    </div>
-                    <div class="col-auto">
-                      <button type="submit" class="btn btn-primary">Start Patching</button>
-                    </div>
-                  </div>
-                </form>
-                <div id="patchStatus" class="mt-2"></div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <!-- Transform Phase Panel -->
+      <div class="bg-white p-4 rounded-lg shadow">
+        <h2 class="text-lg font-semibold mb-2 text-gray-600 flex items-center">
+          Transform Phase
+          <span id="transformIndicator" class="status-dot bg-gray-400 ml-2"></span>
+        </h2>
+        <p class="text-xs text-gray-500 mt-1">Processing files with PySpark</p>
       </div>
-      
-      <!-- Targeted Archival Ingestion Section -->
-      <div class="container mt-4">
-        <div class="row">
-          <div class="col-md-12">
-            <div class="card">
-              <div class="card-header">Targeted Archival Ingestion</div>
-              <div class="card-body">
-                <form id="archiveForm">
-                  <div class="form-row">
-                    <div class="col-md-4 mb-3">
-                      <label for="startDate">Start Date:</label>
-                      <input type="date" class="form-control" id="startDate" name="start_date" required>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                      <label for="endDate">End Date:</label>
-                      <input type="date" class="form-control" id="endDate" name="end_date" required>
-                    </div>
-                    <div class="col-md-4 mb-3 align-self-end">
-                      <button type="button" id="getFilesBtn" class="btn btn-primary">Get Archive Files</button>
-                    </div>
-                  </div>
-                </form>
-                <div id="fileList" class="mt-3"></div>
-                <button type="button" id="ingestBtn" class="btn btn-success mt-3" style="display: none;">Confirm Ingestion</button>
-                <div id="ingestSummary" class="mt-3"></div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <!-- Load Phase Panel -->
+      <div class="bg-white p-4 rounded-lg shadow">
+        <h2 class="text-lg font-semibold mb-2 text-gray-600 flex items-center">
+          Load Phase
+          <span id="loadIndicator" class="status-dot bg-gray-400 ml-2"></span>
+        </h2>
+        <p class="text-xs text-gray-500 mt-1">Ingesting JSON via Logstash</p>
       </div>
-      
-      <!-- Process Logs Panel -->
-      <div class="row mt-4">
-        <div class="col-md-12">
-          <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <div>Session Logs</div>
-              <button class="btn btn-sm btn-link" type="button" data-toggle="collapse" data-target="#logPanelCollapse" aria-expanded="true" aria-controls="logPanelCollapse">
-                Toggle Logs
-              </button>
-            </div>
-            <div id="logPanelCollapse" class="collapse show">
-              <div class="card-body">
-                <pre id="logPanel" class="log-panel"></pre>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
     </div>
-    
-    <script>
-      // Global variable to keep track of the previous ingestion status
-      var prevIngestionStatus = null;
-      
-      // Poll the /remaining endpoint every second to update the countdown.
-      function updateRemaining() {
-        $.getJSON('/remaining', function(data) {
-            $('#remaining').text(data.remaining);
-        });
-      }
-      setInterval(updateRemaining, 1000);
-      updateRemaining();
 
-      // Trigger patching for custom date range
-      $('#getFilesBtn').click(function () {
-        const startDate = $('#startDate').val();
-        const endDate = $('#endDate').val();
+    <!-- Manual Patching Section -->
+    <div class="bg-white p-6 rounded-lg shadow mb-6">
+      <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center">
+        <span>Patch Files</span>
+        <span id="patchTitleIndicator" class="ml-2 status-dot bg-gray-400"></span>
+      </h2>
+      <form id="patchForm" class="flex flex-col sm:flex-row sm:items-end gap-4">
+        <div class="flex-grow">
+          <label for="lookBackDays" class="block text-sm font-medium text-gray-600 mb-1">Look Back Period (days):</label>
+          <input type="number" id="lookBackDays" name="look_back_days" class="w-full px-3 py-2 border border-gray-300 rounded-md" value="1" min="1">
+        </div>
+        <button type="submit" id="startPatchBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded whitespace-nowrap">Start Patching</button>
+      </form>
+      <div id="patchTaskStatus" class="mt-4 text-sm text-gray-600 min-h-[4em]"></div>
+      <!-- Progress bar for patching task -->
+      <div id="patchProgressContainer" class="mt-2 hidden">
+        <progress id="patchProgressBar" max="100" value="0" class="w-full"></progress>
+      </div>
+      <button id="cancelPatchBtn" class="mt-2 hidden bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs">Cancel</button>
+    </div>
 
-        if (!startDate || !endDate) {
-          alert('Please select both start and end dates.');
-          return;
-        }
-        $.ajax({
-        url: '/get_archive_files',
-        type: 'POST',
-        data: {
-          start_date: startDate,
-          end_date: endDate
-        },
-        error: function (xhr, status, error) {
-          let errorMessage = 'Failed to retrieve archive files. ';
-          
-          // Check for no response (bad internet connection)
-          if (xhr.status === 0) {
-            errorMessage += 'It seems there is a problem with your internet connection. Please check your network.';
-          } 
-          // Check for server errors
-          else if (xhr.status >= 500) {
-            errorMessage += 'The server encountered an error. Please try again later.';
-          } 
-          // Check for client errors or invalid scraping responses
-          else if (xhr.status >= 400) {
-            // Optionally, try to parse any JSON error message sent back by the server.
-            let responseText = xhr.responseText;
-            try {
-              let jsonResponse = JSON.parse(responseText);
-              if (jsonResponse.error) {
-                errorMessage += jsonResponse.error;
-              } else {
-                errorMessage += xhr.status + ': ' + xhr.statusText;
-              }
-            } catch (e) {
-              errorMessage += xhr.status + ': ' + xhr.statusText;
-            }
-          } 
-          else {
-            errorMessage += 'Error: ' + error;
-          } 
-          alert(errorMessage);
-        }
-      });
-      });
-      
-      // Function to poll the /status endpoint and update the indicators
-      function updateStatus() {
-        $.getJSON('/status', function(data) {
-          // Update scraping indicator
-          if (data.scraping === 'running') {
-            $('#scrapingIndicator').removeClass().addClass('status-indicator bg-success ml-2');
-          } else if (data.scraping === 'error') {
-            $('#scrapingIndicator').removeClass().addClass('status-indicator bg-danger ml-2');
+    <!-- Targeted Archival Section -->
+    <div class="bg-white p-6 rounded-lg shadow mb-6">
+      <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center">
+        <span>Targeted Archival Extraction</span>
+        <span id="archiveTitleIndicator" class="ml-2 status-dot bg-gray-400"></span>
+      </h2>
+      <form id="archiveForm" class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+        <div>
+          <label for="startDate" class="block text-sm font-medium text-gray-600 mb-1">Start Date:</label>
+          <input type="date" id="startDate" name="start_date" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+        </div>
+        <div>
+          <label for="endDate" class="block text-sm font-medium text-gray-600 mb-1">End Date:</label>
+          <input type="date" id="endDate" name="end_date" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+        </div>
+        <button type="submit" id="startArchiveBtn" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded whitespace-nowrap">Download Archive</button>
+      </form>
+      <div id="archiveTaskStatus" class="mt-4 text-sm text-gray-600 min-h-[4em]"></div>
+      <!-- Progress bar for archive task -->
+      <div id="archiveProgressContainer" class="mt-2 hidden">
+        <progress id="archiveProgressBar" max="100" value="0" class="w-full"></progress>
+      </div>
+      <button id="cancelArchiveBtn" class="mt-2 hidden bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs">Cancel</button>
+    </div>
+
+    <!-- Main Process Logs -->
+    <div class="bg-white p-6 rounded-lg shadow mb-6">
+      <h2 class="text-xl font-semibold mb-4 text-gray-700">Main Process Logs (Extract/Transform)</h2>
+      <pre id="logPanel" class="log-panel bg-gray-50 p-4 rounded-md border border-gray-200 h-96 overflow-y-scroll text-xs font-mono"></pre>
+    </div>
+  </div>
+
+  <!-- JavaScript: Polling, Form Submission, and Task Cancellation -->
+  <script>
+    // Poll remaining time for extract phase every second
+    function updateRemainingExtract() {
+      $.getJSON('/remaining')
+        .done(data => $('#remainingExtract').text(data.remaining || "Loading..."))
+        .fail(() => $('#remainingExtract').text('Error'));
+    }
+    setInterval(updateRemainingExtract, 1000);
+    updateRemainingExtract();
+
+    // Poll pipeline status for extract, transform, and load phases every second
+    function updatePipelineStatus() {
+      $.getJSON('/status')
+        .done(data => {
+          // Extract Phase
+          if (data.extract === 'running') {
+            $('#extractIndicator').removeClass().addClass('status-dot bg-green-500 ml-2');
+          } else if (data.extract === 'error') {
+            $('#extractIndicator').removeClass().addClass('status-dot bg-red-500 ml-2');
           } else {
-            $('#scrapingIndicator').removeClass().addClass('status-indicator bg-secondary ml-2');
+            $('#extractIndicator').removeClass().addClass('status-dot bg-gray-400 ml-2');
           }
-          
-          // Update ingestion indicator and send alert if ingestion has completed
-          if (data.ingestion === 'running') {
-            $('#ingestionIndicator').removeClass().addClass('status-indicator bg-success ml-2');
-          } else if (data.ingestion === 'error') {
-            $('#ingestionIndicator').removeClass().addClass('status-indicator bg-danger ml-2');
-          } else if (data.ingestion === 'completed') {
-            $('#ingestionIndicator').removeClass().addClass('status-indicator bg-secondary ml-2');
-            if (prevIngestionStatus === 'running') {
-              alert("Ingestion process has been completed!");
-            }
+          // Transform Phase
+          if (data.transform === 'running') {
+            $('#transformIndicator').removeClass().addClass('status-dot bg-green-500 ml-2');
+          } else if (data.transform === 'error') {
+            $('#transformIndicator').removeClass().addClass('status-dot bg-red-500 ml-2');
           } else {
-            $('#ingestionIndicator').removeClass().addClass('status-indicator bg-secondary ml-2');
+            $('#transformIndicator').removeClass().addClass('status-dot bg-gray-400 ml-2');
           }
-          prevIngestionStatus = data.ingestion;
+          // Load Phase
+          if (data.load === 'running') {
+            $('#loadIndicator').removeClass().addClass('status-dot bg-green-500 ml-2');
+          } else if (data.load === 'error') {
+            $('#loadIndicator').removeClass().addClass('status-dot bg-red-500 ml-2');
+          } else {
+            $('#loadIndicator').removeClass().addClass('status-dot bg-gray-400 ml-2');
+          }
+        })
+        .fail(() => {
+          $('#extractIndicator, #transformIndicator, #loadIndicator').removeClass().addClass('status-dot bg-red-500 ml-2');
         });
-      }
-      
-      // Poll the status every second for real-time updates
-      setInterval(updateStatus, 1000);
-      
-      function updateScrapingLogs() {
-        $.getJSON('/scraping_logs', function(data) {
-          $('#scrapingLog').text(data.lines.join(""));
-        });
-      }
-      
-      // Function to update ingestion logs
-      function updateIngestionLogs() {
-        $.getJSON('/ingestion_logs', function(data) {
-          $('#ingestionLog').text(data.lines.join(""));
-        });
-      }
-      setInterval(updateScrapingLogs, 2000);
-      setInterval(updateIngestionLogs, 2000);
-      updateScrapingLogs();
-      updateIngestionLogs();
-      
-      function updateLogs() {
-      $.getJSON('/logs', function(data) {
-        if (data && data.lines && Array.isArray(data.lines)) {
-          let logContent = data.lines.join("\n");
-          $('#logPanel').text(logContent);
-        } else {
-          $('#logPanel').text("No logs available");
-        }
-      });
+    }
+    setInterval(updatePipelineStatus, 1000);
+    updatePipelineStatus();
+
+    // Poll main logs every 2 seconds
+    function updateLogs() {
+      $.getJSON('/logs')
+        .done(data => {
+          if (data && data.lines && Array.isArray(data.lines)) {
+            $('#logPanel').text(data.lines.join("\n"));
+          } else {
+            $('#logPanel').text("No logs available");
+          }
+        })
+        .fail(() => $('#logPanel').text('Error loading logs.'));
     }
     setInterval(updateLogs, 2000);
     updateLogs();
-      
-      // Handle patch form submission to trigger the patching function
-      $('#patchForm').submit(function(e) {
-        e.preventDefault();
-        var formData = $(this).serialize();
-        $.post('/patching', formData, function(response) {
-          $('#patchStatus').text(response.message);
-        });
-      });
-      
-      // Function to trigger ingestion of selected files
-      $("#ingestBtn").click(function() {
-        var selectedFiles = [];
-        $("input[name='selected_files']:checked").each(function() {
-          selectedFiles.push($(this).val());
-        });
-        if(selectedFiles.length === 0) {
-          alert("Please select at least one file.");
-          return;
-        }
-        $.ajax({
-          url: '/get_archive_files',
-          type: 'POST',
-          contentType: 'application/json',
-          data: JSON.stringify({ files: selectedFiles }),
-          dataType: 'json',
+
+    // --- Progress polling for Patch Task ---
+    let patchInterval = null;
+    function startPatchProgressPolling() {
+      patchInterval = setInterval(function() {
+        $.getJSON('/patch_progress')
+          .done(function(data) {
+            $('#patchProgressBar').attr('value', data.percent);
+            $('#patchTaskStatus').text(data.message);
+            if(data.percent >= 100 || data.message.toLowerCase().includes("cancelled")) {
+              clearInterval(patchInterval);
+              $('#startPatchBtn').prop('disabled', false);
+              $('#cancelPatchBtn').addClass('hidden');
+              $('#patchProgressContainer').addClass('hidden');
+            }
           })
+          .fail(function() {
+            $('#patchTaskStatus').text('Error fetching patch progress.');
+          });
+      }, 2000);
+    }
+
+    // --- Progress polling for Archive Task ---
+    let archiveInterval = null;
+    function startArchiveProgressPolling() {
+      archiveInterval = setInterval(function() {
+        $.getJSON('/archive_progress')
+          .done(function(data) {
+            $('#archiveProgressBar').attr('value', data.percent);
+            $('#archiveTaskStatus').text(data.message);
+            if(data.percent >= 100 || data.message.toLowerCase().includes("cancelled")) {
+              clearInterval(archiveInterval);
+              $('#startArchiveBtn').prop('disabled', false);
+              $('#cancelArchiveBtn').addClass('hidden');
+              $('#archiveProgressContainer').addClass('hidden');
+            }
+          })
+          .fail(function() {
+            $('#archiveTaskStatus').text('Error fetching archive progress.');
+          });
+      }, 2000);
+    }
+
+    // Manual Patching Form submission
+    $('#patchForm').submit(function(e) {
+      e.preventDefault();
+      var formData = $(this).serialize();
+      $('#startPatchBtn').prop('disabled', true);
+      $('#cancelPatchBtn').removeClass('hidden');
+      $('#patchProgressContainer').removeClass('hidden');
+      $.post('/patching', formData)
+        .done(function(response) {
+          startPatchProgressPolling();
+        })
+        .fail(function() {
+          alert('Failed to start patching task.');
+          $('#startPatchBtn').prop('disabled', false);
         });
-    </script>
-    
-    <!-- Optional Bootstrap JS -->
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
-  </body>
+    });
+
+    // Archive Download Form submission
+    $('#archiveForm').submit(function(e) {
+      e.preventDefault();
+      var formData = $(this).serialize();
+      $('#startArchiveBtn').prop('disabled', true);
+      $('#cancelArchiveBtn').removeClass('hidden');
+      $('#archiveProgressContainer').removeClass('hidden');
+      $.post('/archive', formData)
+        .done(function(response) {
+          startArchiveProgressPolling();
+        })
+        .fail(function() {
+          alert('Failed to start archive download task.');
+          $('#startArchiveBtn').prop('disabled', false);
+        });
+    });
+
+    // Cancel Patch Task
+    $('#cancelPatchBtn').click(function() {
+      $.post('/patch_cancel')
+        .done(function(response) {
+          $('#patchTaskStatus').text(response.message);
+        })
+        .fail(function() {
+          alert('Failed to cancel patch task.');
+        });
+    });
+
+    // Cancel Archive Task
+    $('#cancelArchiveBtn').click(function() {
+      $.post('/archive_cancel')
+        .done(function(response) {
+          $('#archiveTaskStatus').text(response.message);
+        })
+        .fail(function() {
+          alert('Failed to cancel archive task.');
+        });
+    });
+  </script>
+</body>
 </html>
