@@ -155,8 +155,8 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
 
     write(f"Patching files from {look_back_days} days ago completed.")
     msg = f'''Number of patching files extracted: {num_files_success}
-Number of patching file errors: {num_files_error}
-Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
+                    Number of patching file errors: {num_files_error}
+                    Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
     write(msg)
     patching_progress["message"] = "Patching task completed."
     patching_progress["percent"] = 100
@@ -229,10 +229,10 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
 
     write(f"Patching files from {start_date_str} to {end_date_str} completed.")
     msg = f'''Number of archive files extracted: {num_files_success}
-Number of archive file errors: {num_files_error}
-Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
+                    Number of archive file errors: {num_files_error}
+                    Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
     write(msg)
-    archive_progress["message"] = "Archive download task completed."
+    archive_progress["message"] = "Targeted archival extraction completed."
     archive_progress["percent"] = 100
 
 ############################ Flask Routes ############################
