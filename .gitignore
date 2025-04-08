@@ -1,5 +1,7 @@
-# Ignore Logstash ingestion-related files
+# Ignore contents of the json ingest directory...
 logstash/logstash_ingest_data/json/*
+# ...but DO NOT ignore the .gitkeep file inside it
+!logstash/logstash_ingest_data/json/.gitkeep
 logstash/csv
 logstash/logs
 
