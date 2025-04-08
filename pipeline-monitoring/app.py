@@ -127,6 +127,10 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
         # Check if file has already been downloaded/processed
         if local_filename in os.listdir(DOWNLOAD_FOLDER):
             write(f"Extraction skipped: {local_filename} already exists.")
+            current += datetime.timedelta(minutes=15)
+            step_count += 1
+            patching_progress["percent"] = int((step_count / total_steps) * 100)
+            patching_progress["message"] = f"Skipped {step_count} of {total_steps} files ({patching_progress['percent']}%)."
             continue
 
         write(f"Extracting patching file: {local_filename}...")
@@ -197,6 +201,10 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
         local_filename = f"{timestamp}.gkg.csv"
         if local_filename in os.listdir(DOWNLOAD_FOLDER):
             write(f"Extraction skipped: {local_filename} already exists.")
+            current += datetime.timedelta(minutes=15)
+            step_count += 1
+            archive_progress["percent"] = int((step_count / total_steps) * 100)
+            archive_progress["message"] = f"Skipped {step_count} of {total_steps} files ({archive_progress['percent']}%)."
             continue
 
         write(f"Extracting archive file: {local_filename}...")
