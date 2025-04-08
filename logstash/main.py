@@ -23,6 +23,7 @@ SCRAPING_LOG_FILE = "./logs/scraping_log.txt"
 INGESTION_LOG_FILE = "./logs/ingestion_log.txt"
 TIMESTAMP_LOG_FILE = "./logs/timestamp_log.txt"
 JSON_LOG_FILE = "./logs/json_log.txt"
+LOGSTASH_PATH = "./logstash_ingest_data/json"
 
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
@@ -275,6 +276,13 @@ def process_downloaded_files():
                 # Create the JSON output path by replacing .csv with .json
                 json_output_path = raw_file_path.replace(".csv", ".json")
                 
+                # Checks for presence of ingestion files
+                curr_file_name = file.replace(".csv", ".json")
+                json_files = os.listdir(LOGSTASH_PATH)
+                if curr_file_name in json_files:
+                    write_all(f"Transformation skipped: {curr_file_name} already exists")
+                    continue
+
                 write_all(f"Transforming file into JSON: {file}")
                 run_pipeline(raw_file_path, json_output_path)
                 
@@ -297,13 +305,12 @@ def move_json_to_ingest(file_path):
     Moves the JSON file over to the json subfolder in logstash_ingest_data.
     :param file_path: File path of target file to be shifted.
     '''
-    logstash_path = "./logstash_ingest_data/json"
-    os.makedirs(logstash_path, exist_ok=True)
+    os.makedirs(LOGSTASH_PATH, exist_ok=True)
     
     # Only copy the .json file
     if os.path.isfile(file_path) and file_path.endswith(".json"):
         # Get the filename from the full path and copy to the target directory
-        target_path = os.path.join(logstash_path, os.path.basename(file_path))
+        target_path = os.path.join(LOGSTASH_PATH, os.path.basename(file_path))
         shutil.move(file_path, target_path)
         write(f"Copied {file_path} to {target_path}",JSON_LOG_FILE)
     else:
