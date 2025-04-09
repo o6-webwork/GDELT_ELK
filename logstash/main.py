@@ -345,7 +345,7 @@ def process_downloaded_files():
                 
                 # Remove the CSV file using its full path
                 write_all(f"Transformed file into JSON: {file}")
-                with open(PYSPARK_LOG_FILE, "w") as f: f.write()
+                with open(PYSPARK_LOG_FILE, "w") as f: f.write("")
                 os.remove(raw_file_path)
                 write_all(f"Deleted processed CSV file: {raw_file_path}", [LOG_FILE, JSON_LOG_FILE])
 
