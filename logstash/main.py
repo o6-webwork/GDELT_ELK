@@ -367,11 +367,10 @@ def delete_processed_json():
     while True:
         all_json = [i for i in os.listdir(directory) if ".json" in i]
         for filename in all_json:
-            for filename in os.listdir(directory):
-                if es_check_data(filename.split(".")[0]):
-                    write(f"Loaded JSON file into Elasticsearch: {filename}", JSON_LOG_FILE)
-                    file_path = os.path.join(directory, filename)
-                    os.remove(file_path)
+            if es_check_data(filename.split(".")[0]):
+                write(f"Loaded JSON file into Elasticsearch: {filename}", JSON_LOG_FILE)
+                file_path = os.path.join(directory, filename)
+                os.remove(file_path)
 
 def server_scrape():
     '''
