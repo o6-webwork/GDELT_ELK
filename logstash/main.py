@@ -244,7 +244,7 @@ def run_pipeline(raw_file, json_output):
 
     # Reduce to a single partition so that we get one output file.
     df_transformed.coalesce(1).write.mode("overwrite").json(json_output)
-    write(f"Pipeline completed. Single JSON output written to {json_output}", JSON_LOG_FILE)
+    write_all(f"Pipeline completed. Single JSON output written to {json_output}", [LOG_FILE, JSON_LOG_FILE])
 
     # Locates a JSON output file
     json_part_file = glob.glob(os.path.join(json_output, "part-00000-*.json"))[0]
@@ -271,9 +271,9 @@ def move_json_to_ingest(file_path):
         # Get the filename from the full path and copy to the target directory
         target_path = os.path.join(LOGSTASH_PATH, os.path.basename(file_path))
         shutil.move(file_path, target_path)
-        write(f"Copied {file_path} to {target_path}",JSON_LOG_FILE)
+        write_all(f"Copied {file_path} to {target_path}", [LOG_FILE, JSON_LOG_FILE])
     else:
-        write(f"Invalid file: {file_path} (Not a JSON file or file doesn't exist)",JSON_LOG_FILE)
+        write_all(f"Invalid file: {file_path} (Not a JSON file or file doesn't exist)", [LOG_FILE, JSON_LOG_FILE])
 
 def es_client_setup():
     '''
@@ -324,7 +324,7 @@ def process_downloaded_files():
 
                     # Removes the already processed file
                     os.remove(raw_file_path)
-                    write(f"Deleted processed CSV file: {raw_file_path}", JSON_LOG_FILE)
+                    write_all(f"Deleted processed CSV file: {raw_file_path}", [LOG_FILE, JSON_LOG_FILE])
 
                     # Cleaning the corresponding JSON folder (if present)
                     json_folder = file.split(".")[0] + ".gkg.json"
@@ -332,9 +332,9 @@ def process_downloaded_files():
                     if os.path.exists(json_folder_full):
                         try:
                             shutil.rmtree(json_folder_full)
-                            write(f"Deleted processed Spark folder: {json_folder}", JSON_LOG_FILE)
+                            write_all(f"Deleted processed Spark folder: {json_folder}", [LOG_FILE, JSON_LOG_FILE])
                         except Exception as e:
-                            write(f"Error deleting Spark folder {json_folder}: {e}", JSON_LOG_FILE)
+                            write_all(f"Error deleting Spark folder {json_folder}: {e}", [LOG_FILE, JSON_LOG_FILE])
 
                     continue
 
@@ -344,18 +344,18 @@ def process_downloaded_files():
                 # Remove the CSV file using its full path
                 write_all(f"Transformed file into JSON: {file}")
                 os.remove(raw_file_path)
-                write(f"Deleted processed CSV file: {raw_file_path}", JSON_LOG_FILE)
+                write_all(f"Deleted processed CSV file: {raw_file_path}", [LOG_FILE, JSON_LOG_FILE])
 
                 # Cleaning the corresponding JSON folder
                 json_folder = file.split(".")[0] + ".gkg.json"
                 json_folder_full = os.path.join(src_path, json_folder)
                 try:
                     shutil.rmtree(json_folder_full)
-                    write(f"Deleted processed Spark folder: {json_folder}", JSON_LOG_FILE)
+                    write_all(f"Deleted processed Spark folder: {json_folder}", [LOG_FILE, JSON_LOG_FILE])
                 except Exception as e:
-                    write(f"Error deleting Spark folder {json_folder}: {e}", JSON_LOG_FILE)
+                    write_all(f"Error deleting Spark folder {json_folder}: {e}", [LOG_FILE, JSON_LOG_FILE])
 
-                write(f"Loading JSON file into Elasticsearch: {json_file_name}", JSON_LOG_FILE)
+                write_all(f"Loading JSON file into Elasticsearch: {json_file_name}", [LOG_FILE, JSON_LOG_FILE])
 
 def delete_processed_json():
     '''
@@ -368,7 +368,7 @@ def delete_processed_json():
         all_json = [i for i in os.listdir(directory) if ".json" in i]
         for filename in all_json:
             if es_check_data(filename.split(".")[0]):
-                write(f"Loaded JSON file into Elasticsearch: {filename}", JSON_LOG_FILE)
+                write_all(f"Loaded JSON file into Elasticsearch: {filename}", [LOG_FILE, JSON_LOG_FILE])
                 file_path = os.path.join(directory, filename)
                 os.remove(file_path)
 
