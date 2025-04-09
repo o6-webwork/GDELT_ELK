@@ -6,7 +6,6 @@ from io import BytesIO
 from flask import Flask, render_template, jsonify, request
 import threading
 import pytz
-from elasticsearch import Elasticsearch  # Currently not used
 
 app = Flask(__name__)
 
@@ -17,6 +16,7 @@ INGESTION_LOG_FILE = os.environ.get("INGESTION_FILE_PATH", "./logs/ingestion_log
 TIMESTAMP_LOG_FILE = os.environ.get("TIMESTAMP_FILE_PATH", "./logs/timestamp_log.txt")
 JSON_LOG_FILE = os.environ.get("JSON_FILE_PATH", "./logs/json_log.txt")
 DOWNLOAD_FOLDER = "./csv"
+LOGSTASH_FOLDER = "./logstash_ingest_data/json"
 
 INTERVAL = 15 * 60  # 15 minutes delay
 
@@ -160,7 +160,7 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
         current += datetime.timedelta(minutes=15)
         step_count += 1
         patching_progress["percent"] = int((step_count / total_steps) * 100)
-        patching_progress["message"] = f"Processing file {step_count} of {total_steps} ({patching_progress['percent']}%)."
+        patching_progress["message"] = f"Extracting file {step_count} of {total_steps} ({patching_progress['percent']}%)."
 
     write(f"Patching files from {look_back_days} days ago completed.")
     msg = f'''Number of patching files extracted: {num_files_success}
@@ -236,7 +236,7 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
         current += datetime.timedelta(minutes=15)
         step_count += 1
         archive_progress["percent"] = int((step_count / total_steps) * 100)
-        archive_progress["message"] = f"Processing file {step_count} of {total_steps} ({archive_progress['percent']}%)."
+        archive_progress["message"] = f"Extracting file {step_count} of {total_steps} ({archive_progress['percent']}%)."
 
     write(f"Patching files from {start_date_str} to {end_date_str} completed.")
     msg = f'''Number of archive files extracted: {num_files_success}
@@ -297,11 +297,12 @@ def status():
 @app.route('/file_counts', methods=['GET'])
 def file_counts():
     try:
-        files = os.listdir(DOWNLOAD_FOLDER)
+        csv_files = os.listdir(DOWNLOAD_FOLDER)
+        json_files = os.listdir(LOGSTASH_FOLDER)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    csv_count = sum(1 for f in files if f.lower().endswith(".csv"))
-    json_count = sum(1 for f in files if f.lower().endswith(".json"))
+    csv_count = sum(1 for f in csv_files if f.lower().endswith(".csv"))
+    json_count = sum(1 for f in json_files if f.lower().endswith(".json"))
     return jsonify({"csv_count": csv_count, "json_count": json_count})
 
 # Start patching task in background thread

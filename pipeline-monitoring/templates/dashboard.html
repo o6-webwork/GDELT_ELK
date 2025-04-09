@@ -268,6 +268,7 @@
               $('#startPatchBtn').prop('disabled', false);
               $('#cancelPatchBtn').addClass('hidden');
               $('#patchProgressContainer').addClass('hidden');
+              $('#stopAndDeletePatchBtn').addClass('hidden');
             }
           })
           .fail(function() {
@@ -289,6 +290,7 @@
               $('#startArchiveBtn').prop('disabled', false);
               $('#cancelArchiveBtn').addClass('hidden');
               $('#archiveProgressContainer').addClass('hidden');
+              $('#stopAndDeleteArchiveBtn').addClass('hidden');
             }
           })
           .fail(function() {
@@ -304,6 +306,7 @@
       $('#startPatchBtn').prop('disabled', true);
       $('#cancelPatchBtn').removeClass('hidden');
       $('#patchProgressWrapper').removeClass('hidden');
+      $('#stopAndDeletePatchBtn').removeClass('hidden');
       $.post('/patching', formData)
         .done(function(response) {
           startPatchProgressPolling();
@@ -321,6 +324,7 @@
       $('#startArchiveBtn').prop('disabled', true);
       $('#cancelArchiveBtn').removeClass('hidden');
       $('#archiveProgressWrapper').removeClass('hidden');
+      $('#stopAndDeleteArchiveBtn').removeClass('hidden');
       $.post('/archive', formData)
         .done(function(response) {
           startArchiveProgressPolling();

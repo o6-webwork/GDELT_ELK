@@ -207,5 +207,6 @@ services:
     volumes:
       - logdata:/app/logs
       - csvfiles:/app/csv
+      - logstash01:/app/logstash_ingest_data/json
     ports:
       - ${PIPELINE_MONITORING_PORT}:7979
