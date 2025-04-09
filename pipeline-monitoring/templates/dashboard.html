@@ -98,7 +98,11 @@
     <!-- New flex container for progress bar and Cancel button -->
     <div id="patchProgressWrapper" class="mt-2 hidden flex items-center gap-4">
       <progress id="patchProgressBar" max="100" value="0" class="w-full"></progress>
-      <button id="cancelPatchBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs">Cancel</button>
+      <!-- In the Patch Files section, add a new button for full stop and cleanup -->
+      <div id="patchControlButtons" class="flex gap-4 mt-2">
+        <button id="cancelPatchBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs">Cancel</button>
+        <button id="stopAndDeletePatchBtn" class="bg-red-700 hover:bg-red-800 text-white font-bold py-1 px-2 rounded text-xs">Stop & Delete Files</button>
+      </div>
     </div>
   </div>
 
@@ -123,7 +127,11 @@
     <!-- New flex container for archive progress bar and Cancel button -->
     <div id="archiveProgressWrapper" class="mt-2 hidden flex items-center gap-4">
       <progress id="archiveProgressBar" max="100" value="0" class="w-full"></progress>
-      <button id="cancelArchiveBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs">Cancel</button>
+      <!-- In the Patch Files section, add a new button for full stop and cleanup -->
+      <div id="archiveControlButtons" class="flex gap-4 mt-2">
+        <button id="cancelArchiveBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs">Cancel</button>
+        <button id="stopAndDeleteArchiveBtn" class="bg-red-700 hover:bg-red-800 text-white font-bold py-1 px-2 rounded text-xs">Stop & Delete Files</button>
+      </div>
     </div>
   </div>
 
@@ -344,6 +352,29 @@
           alert('Failed to cancel archive task.');
         });
     });
+
+    //"Stop & Delete Files" button (patching)
+    $('#stopAndDeletePatchBtn').click(function() {
+      $.post('/patch_stop_delete')
+        .done(function(response) {
+          $('#patchTaskStatus').text(response.message);
+        })
+        .fail(function() {
+          alert('Failed to stop and delete patch files.');
+        });
+    });
+
+    //"Stop & Delete Files" button (archival)
+    $('#stopAndDeleteArchiveBtn').click(function() {
+      $.post('/archive_stop_delete')
+        .done(function(response) {
+          $('#archiveTaskStatus').text(response.message);
+        })
+        .fail(function() {
+          alert('Failed to stop and delete archive files.');
+        });
+    });
+
   </script>
 </body>
 </html>

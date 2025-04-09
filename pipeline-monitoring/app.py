@@ -31,6 +31,11 @@ archive_cancel_event = threading.Event()
 patching_progress = {"percent": 0, "message": ""}
 archive_progress = {"percent": 0, "message": ""}
 
+# Global list to track files downloaded/created during task
+patching_downloaded_files = []
+archive_downloaded_files = []
+
+
 ############################ Helper Functions ############################
 
 def write(content):
@@ -98,6 +103,7 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
     Checks for cancellation at each 15-minute interval.
     Updates patching_progress with the percent complete.
     """
+    downloaded_patching_files = []
     global patching_progress
     num_files_success, num_files_error = 0, 0
     now = datetime.datetime.now()
@@ -141,6 +147,8 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
             if response.status_code == 200:
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
                 zip_file.extract(local_filename, DOWNLOAD_FOLDER)
+                # Track the file as part of this task's downloads
+                patching_downloaded_files.append(local_filename)
                 num_files_success += 1
                 write(f"Extracting patching file completed: {local_filename}.")
             else:
@@ -215,8 +223,10 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
             if response.status_code == 200:
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
                 zip_file.extract(local_filename, DOWNLOAD_FOLDER)
-                write(f"Extracting archive file completed: {local_filename}.")
+                # Track the file as part of this task's downloads
+                archive_downloaded_files.append(local_filename)
                 num_files_success += 1
+                write(f"Extracting archive file completed: {local_filename}.")
             else:
                 write(f"Archival download error {response.status_code} for URL: {file_url}")
                 num_files_error += 1
@@ -313,6 +323,31 @@ def patch_cancel():
     patching_cancel_event.set()
     return jsonify({"message": "Patching cancellation initiated."})
 
+#Stop and delete for patching task
+@app.route('/patch_stop_delete', methods=['POST'])
+def patch_stop_and_delete():
+    global patching_cancel_event, patching_downloaded_files, patching_progress
+    # Cancel the running patching task
+    patching_cancel_event.set()
+    
+    deleted_files = []
+    try:
+        # Iterate through the list of files downloaded during this task
+        for filename in patching_downloaded_files:
+            file_path = os.path.join(DOWNLOAD_FOLDER, filename)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                deleted_files.append(filename)
+        # Clear the tracking list after deletion
+        patching_downloaded_files = []
+        patching_progress["message"] = "Patching task cancelled and downloaded files deleted."
+        write("Patching task cancelled and downloaded files deleted by user request.")
+        return jsonify({"message": f"Patching cancelled. Deleted files: {', '.join(deleted_files)}"})
+    except Exception as e:
+        write(f"Error during deletion of patch files: {e}")
+        patching_progress["message"] = "Patching cancelled, but an error occurred during file deletion."
+        return jsonify({"message": f"Patching cancelled, but an error occurred during file deletion: {e}"}), 500
+
 # Start archival download task in background thread
 @app.route('/archive', methods=['POST'])
 def archive_download():
@@ -336,6 +371,31 @@ def archive_cancel():
     global archive_cancel_event
     archive_cancel_event.set()
     return jsonify({"message": "Archive download cancellation initiated."})
+
+#Stop and delete for archival download task
+@app.route('/archive_stop_delete', methods=['POST'])
+def archive_stop_and_delete():
+    global archive_cancel_event, archive_downloaded_files, archive_progress
+    # Cancel the running archive task
+    archive_cancel_event.set()
+    
+    deleted_files = []
+    try:
+        # Iterate through the list of files downloaded during this task
+        for filename in archive_downloaded_files:
+            file_path = os.path.join(DOWNLOAD_FOLDER, filename)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                deleted_files.append(filename)
+        # Clear the tracking list after deletion
+        archive_downloaded_files = []
+        archive_progress["message"] = "Archive task cancelled and downloaded files deleted."
+        write("Archive task cancelled and downloaded files deleted by user request.")
+        return jsonify({"message": f"Archive cancelled. Deleted files: {', '.join(deleted_files)}"})
+    except Exception as e:
+        write(f"Error during deletion of archive files: {e}")
+        archive_progress["message"] = "Archive cancelled, but an error occurred during file deletion."
+        return jsonify({"message": f"Archive cancelled, but an error occurred during file deletion: {e}"}), 500
 
 @app.route('/get_archive_files', methods=['POST'])
 def get_archive_files():

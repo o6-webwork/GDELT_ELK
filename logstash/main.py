@@ -280,10 +280,9 @@ def es_client_setup():
     Sets up client to connect to Elasticsearch.
     '''
     es_client = Elasticsearch(
-        "https://es01:9200",
+        f"https://es01:9200",
         basic_auth=("elastic", "changeme"),
-        verify_certs=True,
-        ca_certs="./certs/ca/ca.crt",
+        verify_certs=False, # Set to True if using trusted certs
         request_timeout=30
     )
     return es_client
@@ -365,8 +364,7 @@ def delete_processed_json():
     directory="./logstash_ingest_data/json"
 
     while True:
-        all_json = [i for i in os.listdir(directory) if ".json" in i]
-        for filename in all_json:
+        for filename in os.listdir(directory):
             if es_check_data(filename.split(".")[0]):
                 write(f"Loaded JSON file into Elasticsearch: {filename}", JSON_LOG_FILE)
                 file_path = os.path.join(directory, filename)
