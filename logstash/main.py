@@ -4,7 +4,6 @@ import requests
 import zipfile
 from io import BytesIO
 from time import sleep
-import sys
 import os
 from pyspark.sql.functions import col, struct, array_distinct
 from pyspark.sql import SparkSession
@@ -13,7 +12,7 @@ from etl.parse_gkg import gkg_parser
 from pyspark.sql.functions import col, concat_ws
 import glob
 import shutil
-import time, datetime, pytz
+import datetime, pytz
 from elasticsearch import Elasticsearch
 
 # Constants
@@ -281,9 +280,10 @@ def es_client_setup():
     Sets up client to connect to Elasticsearch.
     '''
     es_client = Elasticsearch(
-        f"https://es01:9200",
+        "https://es01:9200",
         basic_auth=("elastic", "changeme"),
-        verify_certs=False, # Set to True if using trusted certs
+        verify_certs=True,
+        ca_certs="./certs/ca/ca.crt",
         request_timeout=30
     )
     return es_client
@@ -365,7 +365,8 @@ def delete_processed_json():
     directory="./logstash_ingest_data/json"
 
     while True:
-        for filename in os.listdir(directory):
+        all_json = [i for i in os.listdir(directory) if ".json" in i]
+        for filename in all_json:
             if es_check_data(filename.split(".")[0]):
                 write(f"Loaded JSON file into Elasticsearch: {filename}", JSON_LOG_FILE)
                 file_path = os.path.join(directory, filename)

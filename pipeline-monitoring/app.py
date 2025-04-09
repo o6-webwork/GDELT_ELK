@@ -73,12 +73,12 @@ def get_remaining_time():
         print(f"Error reading log file: {e}")
         return None
 
-def get_pipeline_status(pipeline, respective_log_file):
+def get_pipeline_status(respective_log_file):
     """
     Determines the pipeline status by parsing the provided log file.
     Returns 'running' or 'error'.
     """
-
+    status = "running"
     with open(respective_log_file, "r") as f:
         # Read all non-empty lines, then take the last 5
         lines = [line.strip() for line in f if line.strip()]
@@ -274,9 +274,9 @@ def displaying_ingestion_logs():
 def status():
     # Note: the extract, transform, and load statuses are determined by log files.
     # For brevity, these remain unchanged.
-    scraping_status = get_pipeline_status("scraping", SCRAPING_LOG_FILE)
-    transform_status = get_pipeline_status("transform", JSON_LOG_FILE)
-    ingestion_status = get_pipeline_status("ingestion", INGESTION_LOG_FILE)
+    scraping_status = get_pipeline_status(SCRAPING_LOG_FILE)
+    transform_status = get_pipeline_status(JSON_LOG_FILE)
+    ingestion_status = get_pipeline_status(INGESTION_LOG_FILE)
     return jsonify({
         "extract": scraping_status,
         "transform": transform_status,
