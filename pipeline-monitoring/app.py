@@ -6,6 +6,7 @@ from io import BytesIO
 from flask import Flask, render_template, jsonify, request
 import threading
 import pytz
+from elasticsearch import Elasticsearch
 
 app = Flask(__name__)
 
@@ -17,6 +18,7 @@ TIMESTAMP_LOG_FILE = os.environ.get("TIMESTAMP_FILE_PATH", "./logs/timestamp_log
 JSON_LOG_FILE = os.environ.get("JSON_FILE_PATH", "./logs/json_log.txt")
 DOWNLOAD_FOLDER = "./csv"
 LOGSTASH_FOLDER = "./logstash_ingest_data/json"
+PYSPARK_LOG_FILE = "./logs/pyspark_log.txt"
 
 INTERVAL = 15 * 60  # 15 minutes delay
 
@@ -97,13 +99,34 @@ def get_pipeline_status(respective_log_file):
 
     return status
 
+def es_client_setup():
+    '''
+    Sets up client to connect to Elasticsearch.
+    '''
+    es_client = Elasticsearch(
+        "https://es01:9200",
+        basic_auth=("elastic", "changeme"),
+        verify_certs=True, # Set to True if using trusted certs
+        ca_certs="./certs/ca/ca.crt",
+        request_timeout=30
+    )
+    return es_client
+
+def es_check_data(timestamp_str):
+    '''
+    Queries Elasticsearch to check if data for given timestamp exists.
+    '''
+    client = es_client_setup()
+    query_body = {"query": {"term": {"GkgRecordId.Date": timestamp_str}}}
+    response = client.count(index='gkg*', body=query_body, request_timeout=10)
+    return response.get('count', 0) > 0
+
 def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdeltv2/"):
     """
     Downloads CSV files from the GDELT archive based on a look-back period.
     Checks for cancellation at each 15-minute interval.
     Updates patching_progress with the percent complete.
     """
-    downloaded_patching_files = []
     global patching_progress
     num_files_success, num_files_error = 0, 0
     now = datetime.datetime.now()
@@ -132,7 +155,8 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
         local_filename = f"{timestamp}.gkg.csv"
 
         # Check if file has already been downloaded/processed
-        if local_filename in os.listdir(DOWNLOAD_FOLDER):
+        if local_filename in os.listdir(DOWNLOAD_FOLDER) \
+            or es_check_data(timestamp) or f"{timestamp}.json" in os.listdir("./logstash_ingest_data/json"):
             write(f"Extraction skipped: {local_filename} already exists.")
             current += datetime.timedelta(minutes=15)
             step_count += 1
@@ -210,7 +234,8 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
 
         timestamp = current.strftime("%Y%m%d%H%M%S")
         local_filename = f"{timestamp}.gkg.csv"
-        if local_filename in os.listdir(DOWNLOAD_FOLDER):
+        if local_filename in os.listdir(DOWNLOAD_FOLDER) or es_check_data(timestamp) \
+            or f"{timestamp}.json" in os.listdir("./logstash_ingest_data/json"):
             write(f"Extraction skipped: {local_filename} already exists.")
             current += datetime.timedelta(minutes=15)
             step_count += 1
@@ -341,7 +366,8 @@ def patch_stop_and_delete():
         # Iterate through the list of files downloaded during this task
         for filename in patching_downloaded_files:
             file_path = os.path.join(DOWNLOAD_FOLDER, filename)
-            if os.path.exists(file_path):
+            with open(PYSPARK_LOG_FILE, "r") as f: curr = f.read()
+            if os.path.exists(file_path) and curr not in file_path:
                 os.remove(file_path)
                 deleted_files.append(filename)
         # Clear the tracking list after deletion
