@@ -165,11 +165,9 @@ services:
       - logdata:/app/logs
       - csvfiles:/app/csv
       - certs:/app/certs
-
     depends_on:
       es01:
         condition: service_healthy
-
     networks:
       - elastic
 
@@ -208,5 +206,8 @@ services:
       - logdata:/app/logs
       - csvfiles:/app/csv
       - logstash01:/app/logstash_ingest_data/json
+      - certs:/app/certs
     ports:
       - ${PIPELINE_MONITORING_PORT}:7979
+    networks:
+      - elastic

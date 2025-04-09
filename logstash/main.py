@@ -24,12 +24,13 @@ INGESTION_LOG_FILE = "./logs/ingestion_log.txt"
 TIMESTAMP_LOG_FILE = "./logs/timestamp_log.txt"
 JSON_LOG_FILE = "./logs/json_log.txt"
 LOGSTASH_PATH = "./logstash_ingest_data/json"
+PYSPARK_LOG_FILE = "./logs/pyspark_log.txt"
 
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
 
 # Cleans the logs at the start of every session.
-for file in [LOG_FILE, SCRAPING_LOG_FILE, INGESTION_LOG_FILE, TIMESTAMP_LOG_FILE, JSON_LOG_FILE]:
+for file in [LOG_FILE, SCRAPING_LOG_FILE, INGESTION_LOG_FILE, TIMESTAMP_LOG_FILE, JSON_LOG_FILE, PYSPARK_LOG_FILE]:
     with open(file, "w") as f:
         f.write("")
 
@@ -337,12 +338,14 @@ def process_downloaded_files():
                             write_all(f"Error deleting Spark folder {json_folder}: {e}", [LOG_FILE, JSON_LOG_FILE])
 
                     continue
-
+                
+                write(timestamp_str, PYSPARK_LOG_FILE)
                 write_all(f"Transforming file into JSON: {file}")
                 run_pipeline(raw_file_path, json_output_path)
                 
                 # Remove the CSV file using its full path
                 write_all(f"Transformed file into JSON: {file}")
+                with open(PYSPARK_LOG_FILE, "w") as f: f.write()
                 os.remove(raw_file_path)
                 write_all(f"Deleted processed CSV file: {raw_file_path}", [LOG_FILE, JSON_LOG_FILE])
 
