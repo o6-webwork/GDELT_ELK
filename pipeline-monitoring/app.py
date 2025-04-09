@@ -267,7 +267,7 @@ def displaying_scraping_logs():
 
 @app.route('/ingestion_logs', methods=['GET'])
 def displaying_ingestion_logs():
-    ingestion_logs = displaying_logs(INGESTION_LOG_FILE)
+    ingestion_logs = displaying_logs(JSON_LOG_FILE)
     return jsonify({"lines": ingestion_logs})
 
 @app.route('/status', methods=['GET'])

@@ -406,6 +406,7 @@ if __name__ == "__main__":
     thread1.start()
     thread2.start()
     thread3.start()
+    
     thread1.join()
     thread2.join()
     thread3.join()
