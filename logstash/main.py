@@ -88,7 +88,7 @@ def download_and_extract(url):
                 write_all(f"Extracting latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
                 zip_file.extract(file, DOWNLOAD_FOLDER)
                 write_all(f"Extracted latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
-        else: write_all(f"Extraction skipped: {file} already exists.")
+        else: write_all(f"Extraction skipped: {file} already exists.", [LOG_FILE, SCRAPING_LOG_FILE])
 
 
 def run_pipeline(raw_file, json_output):
@@ -280,9 +280,10 @@ def es_client_setup():
     Sets up client to connect to Elasticsearch.
     '''
     es_client = Elasticsearch(
-        f"https://es01:9200",
+        "https://es01:9200",
         basic_auth=("elastic", "changeme"),
-        verify_certs=False, # Set to True if using trusted certs
+        verify_certs=True, # Set to True if using trusted certs
+        ca_certs="./certs/ca/ca.crt",
         request_timeout=30
     )
     return es_client
@@ -364,11 +365,13 @@ def delete_processed_json():
     directory="./logstash_ingest_data/json"
 
     while True:
-        for filename in os.listdir(directory):
-            if es_check_data(filename.split(".")[0]):
-                write(f"Loaded JSON file into Elasticsearch: {filename}", JSON_LOG_FILE)
-                file_path = os.path.join(directory, filename)
-                os.remove(file_path)
+        all_json = [i for i in os.listdir(directory) if ".json" in i]
+        for filename in all_json:
+            for filename in os.listdir(directory):
+                if es_check_data(filename.split(".")[0]):
+                    write(f"Loaded JSON file into Elasticsearch: {filename}", JSON_LOG_FILE)
+                    file_path = os.path.join(directory, filename)
+                    os.remove(file_path)
 
 def server_scrape():
     '''
