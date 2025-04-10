@@ -7,10 +7,10 @@ import threading
 import pytz
 from elasticsearch import Elasticsearch
 
-from fastapi import FastAPI, Request, Form, HTTPException
+from fastapi import FastAPI, Request, Form
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
+import uvicorn
 
 # Create FastAPI app instance
 app = FastAPI()
@@ -464,5 +464,4 @@ async def archive_progress_endpoint():
 ############################ Main ############################
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=7979, reload=True)
