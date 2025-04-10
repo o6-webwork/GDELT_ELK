@@ -1,144 +1,89 @@
-# Logstash Ingestion Pipeline Setup
+# GDELT ELK Pipeline (Refactored)
 
-This document outlines how to set up a Logstash ingestion pipeline using Docker to ingest newline-delimited JSON files into Elasticsearch. The key points of this configuration are:
+## Overview
 
-## Key Configuration Points
+This repository provides a comprehensive system for processing GDELT GKG data and visualizing trends. It automates the download of GDELT data, transformation using PySpark, ingestion into Elasticsearch via Logstash, and provides a web interface for monitoring, control, and analysis.
 
-1. **Same Docker Network:**
-   - Logstash runs on the same Docker network as Elasticsearch and Kibana for easy service discovery.
+The project uses Docker Compose to manage the entire stack.
 
-2. **Using Elasticsearch IP:**
-   - The configuration uses the Elasticsearch container’s IP address to ensure connectivity.
+## Features
 
-3. **Volume Mounts:**
-   - Two volumes are used:
-     - One for the Logstash configuration files.
-     - One for the JSON ingestion folder.
-
----
+* **Automated ETL:** Periodically checks for new GDELT GKG data, downloads CSVs, transforms them to JSON using PySpark, and prepares them for ingestion.
+* **Elasticsearch & Kibana:** Ingests processed data into Elasticsearch and allows exploration/visualization via Kibana.
+* **Web Frontend (Streamlit):**
+    * **Pipeline Monitoring:** View the status of backend components (API, Elasticsearch) and access ETL/Logstash logs.
+    * **Manual Tasks:** Trigger background tasks to download missing GDELT data for recent days ("Patching") or specific historical date ranges ("Archive Download"). Monitor the progress of these tasks.
+    * **Trend Analysis:** Analyze and visualize trends in entity mentions over selected time periods using the Mann-Kendall test.
+* **Backend API (FastAPI):** Provides data and control endpoints for the frontend (status, logs, trends data, task management).
 
 ## Prerequisites
 
-- **Docker:** Installed and running.
-- **Docker Network:** Create a Docker network (e.g., `elastic`) so that all containers (Elasticsearch, Kibana, and Logstash) can communicate.
-- **Elasticsearch and Kibana:** Running on the same network.
+Before you begin, ensure you have the following installed:
 
----
+* Docker
+* Docker Compose (usually included with Docker Desktop)
 
-## Docker Network Setup
+## Setup & Running
 
-Create a Docker network (if you haven’t already):
+1.  **Create `.env` File:**
+    * Create a file named `.env` in the project root directory.
+    * Define the necessary environment variables in this file. Refer to the `docker-compose.yml` file for a full list of variables used by the services. Essential variables include:
+        ```dotenv
+        # .env file content example
 
-```bash
-docker network create elastic
-```
+        # --- Required ---
+        # Elastic Stack Version (e.g., 8.17.0 - ensure compatibility across components)
+        STACK_VERSION=8.17.0
 
----
+        # Elasticsearch Credentials (Choose strong passwords)
+        ELASTIC_PASSWORD=your_strong_elastic_password
 
-## Running Logstash
+        # Kibana Credentials (Password for the kibana_system user)
+        KIBANA_PASSWORD=your_strong_kibana_password
 
-Use the following Docker command to run Logstash. Adjust the host paths and parameters as needed:
+        # Kibana Encryption Key (Generate a random strong key, e.g., 32+ characters)
+        ENCRYPTION_KEY=your_strong_random_encryption_key
 
-```bash
-docker run --rm -it --name log01 --network elastic \
-  -v ~/pipeline/:/usr/share/logstash/pipeline/ \
-  -v /home/mushroom/OTB-ElasticSearch/pyspark_gdelt/transformed_gkg.json/:/usr/share/logstash/data/ \
-  docker.elastic.co/logstash/logstash:8.17.2
-```
+        # --- Optional / Defaults ---
+        # Cluster Name
+        # CLUSTER_NAME=gdelt-elk-cluster
 
-### Explanation:
+        # Elasticsearch User (Defaults to 'elastic')
+        # ELASTIC_USER=elastic
 
-- `--rm -it`: Runs the container interactively and removes it when stopped.
-- `--name log01`: Names the container `log01`.
-- `--network elastic`: Connects the container to the Docker network named `elastic`.
-- `-v ~/pipeline/:/usr/share/logstash/pipeline/`: Mounts the host directory (containing Logstash configuration files) to the container’s pipeline directory.
-- `-v /home/otb-02/code/logstash_ingest/:/usr/share/logstash/data/`: Mounts the host directory (containing JSON files) to the container’s data directory.
-- `docker.elastic.co/logstash/logstash:8.17.2`: Specifies the Logstash Docker image.
+        # Ports (Defaults shown, change if needed)
+        # ES_PORT=9200
+        # KIBANA_PORT=5601
 
----
+        # Memory Limits for ELK stack components (adjust based on system resources)
+        # ES_MEM_LIMIT=4g
+        # KB_MEM_LIMIT=2g
+        # LS_MEM_LIMIT=2g
+        # ES_JAVA_OPTS="-Xms2g -Xmx2g" # Example for Elasticsearch JVM heap size
+        # LS_JAVA_OPTS="-Xms1g -Xmx1g" # Example for Logstash JVM heap size
+        ```
 
-## Logstash Configuration File
+2.  **Build and Run Services:**
+    * Open a terminal or command prompt in the project root directory (where `docker-compose.yml` is located).
+    * Run the following command:
+        ```bash
+        docker-compose up --build -d
+        ```
+        * `--build`: Builds the images for custom services (frontend, backend, etl) if they don't exist or if their source code/Dockerfile has changed.
+        * `-d`: Runs the containers in detached mode (in the background). Omit this flag if you want to see the combined logs in your terminal.
 
-Save the following configuration file (e.g., `gdelt_ingest.conf`) in your configuration directory (e.g., `~/pipeline/`):
-
-```ruby
-input {
-  file {
-    path => "/usr/share/logstash/data/*.json"  # JSON files in the mounted ingestion folder
-    start_position => "beginning"              # Read new files from the beginning
-    sincedb_path => "/usr/share/logstash/data/sincedb.txt"  # Persistent file to remember ingestion state
-    codec => json                             # Parse each line as a JSON object
-  }
-}
-
-output {
-  elasticsearch {
-    hosts => ["https://<ES_IP>:9200"]          # Replace <ES_IP> with your Elasticsearch container's IP (e.g., 172.20.0.2)
-    index => "<INDEX_NAME>"                    # Replace <INDEX_NAME> with your desired index name (e.g., gdelt_test)
-    user => "<ES_USER>"                        # Replace <ES_USER> with your Elasticsearch username (e.g., elastic)
-    password => "<ES_PASSWORD>"                # Replace <ES_PASSWORD> with your Elasticsearch password
-    ssl_certificate_verification => false     # Disable certificate verification (for self-signed certs)
-  }
-}
-```
-
-### Generalizing Parameters:
-
-- `<ES_IP>`: The IP address of your Elasticsearch container.
-- `<INDEX_NAME>`: The name of the Elasticsearch index (e.g., `gdelt_test`).
-- `<ES_USER>` & `<ES_PASSWORD>`: Your Elasticsearch credentials.
-
----
-
-## How It Works
-
-1. **File Input:**  
-   Logstash monitors the `/usr/share/logstash/data/` directory for JSON files.
-   - Files are read from the beginning (`start_position => "beginning"`).
-   - The `sincedb` file tracks which files have been ingested to prevent duplicate ingestion on restarts.
-
-2. **Event Parsing:**  
-   Each line in a JSON file is parsed as a separate JSON object using the JSON codec.
-
-3. **Elasticsearch Output:**  
-   Parsed events are sent to Elasticsearch over HTTPS using the provided credentials and indexed under the specified index.
-
-4. **Data Persistence:**  
-   The `sincedb` file persists ingestion state, so Logstash remembers which files it has already processed even after a restart.
-
----
+3.  **Access Components:**
+    * **Frontend Application:** Open your web browser to `http://localhost:8501`
+    * **Kibana:** Access Kibana at `http://localhost:5601` (or the port specified by `KIBANA_PORT` in `.env`). Log in using the `elastic` user and the `ELASTIC_PASSWORD` you set.
+    * **Backend API (Docs):** The API documentation (Swagger UI) is available at `http://localhost:8000/docs`.
+    * **Elasticsearch:** Accessible programmatically or via tools like `curl` at `https://localhost:9200` (or `ES_PORT`). Use the `elastic` user and password. Note: Uses HTTPS with self-signed certificates by default; you may need to bypass verification (`-k` in curl).
 
 ## Troubleshooting
 
-### No Data in Kibana:
-
-- Check that your JSON files are in the correct mounted directory.
-- Verify that Logstash is processing events by checking its logs:
-
-  ```bash
-  docker logs -f log01
-  ```
-
-- Check the document count in Elasticsearch:
-
-  ```bash
-  docker run --rm --network elastic curlimages/curl \
-    curl -u <ES_USER>:<ES_PASSWORD> -X GET "https://<ES_IP>:9200/<INDEX_NAME>/_count" -k
-  ```
-
-### License Checker Warnings:
-
-These warnings from the X-Pack license checker do not affect data ingestion. They can be silenced by configuring or disabling X-Pack monitoring in a custom `logstash.yml`.
-
----
-
-## Conclusion
-
-This setup allows Logstash to monitor a specified folder for new JSON files, ingest them into Elasticsearch, and remember which files have been processed using a persistent `sincedb` file. Adjust the parameters as needed for your environment, and ensure all services are on the same Docker network for smooth communication.
-
-Feel free to modify or extend this configuration based on your specific use case.
-
----
-
-_End of README._
-
+* **Authentication Error:** Ensure the `ELASTIC_PASSWORD` in your `.env` file is correctly picked up by all services (Elasticsearch, Kibana, Logstash, Backend API) as defined in their `environment` sections in `docker-compose.yml`.
+* **Logstash Not Processing Data:**
+    * Check Logstash container logs: `docker-compose logs logstash`
+    * Verify the Logstash pipeline configuration (`backend/etl_pipeline/pipeline/logstash.conf`) correctly specifies the input path (usually `/usr/share/logstash/ingest_json` inside the container).
+    * Check file permissions if issues persist.
+* **Frontend Errors:** Check the frontend container logs (`docker-compose logs frontend-app`) and the browser's developer console for errors. Ensure the `BACKEND_API_URL` environment variable is correctly set for the `frontend-app` service in `docker-compose.yml` (usually `http://backend-api:8000`).
+* **ETL Errors:** Check the ETL processor logs (`docker-compose logs etl_processor`) for issues during download or processing.
