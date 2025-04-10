@@ -1,0 +1,5 @@
+path.logs: /usr/share/logstash/logs
+pipeline.batch.delay: 50
+pipeline.batch.size: 50
+pipeline.workers: 1
+xpack.monitoring.enabled: false

@@ -1,1 +1,0 @@
-# Directory containing JSON Files for Logstash data ingestion
