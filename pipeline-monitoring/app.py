@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 import uvicorn
+from fastapi.responses import RedirectResponse
 
 # Create FastAPI app instance
 app = FastAPI()
@@ -27,6 +28,8 @@ JSON_LOG_FILE = os.environ.get("JSON_FILE_PATH", "./logs/json_log.txt")
 DOWNLOAD_FOLDER = "./csv"
 LOGSTASH_FOLDER = "./logstash_ingest_data/json"
 PYSPARK_LOG_FILE = "./logs/pyspark_log.txt"
+current_viewing_mode = "light"
+alt_viewing_mode = "dark"
 
 INTERVAL = 15 * 60  # 15 minutes delay
 
@@ -47,7 +50,6 @@ archive_downloaded_files = []
 
 
 ############################ Helper Functions ############################
-
 def write(content):
     """
     Append log data into the log file with a current timestamp (Asia/Singapore).
@@ -278,7 +280,6 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
 
 
 ############################ FastAPI Routes ############################
-
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     if os.path.exists(LOG_FILE):
@@ -286,8 +287,16 @@ async def dashboard(request: Request):
             data = f.read().split("\n")
     else:
         data = []
-    return templates.TemplateResponse("dashboard.html", {"request": request, "data": data})
+    return templates.TemplateResponse(
+            "dashboard.html",
+            {"request": request, "data": data, "view_mode": current_viewing_mode, "alt_view_mode": alt_viewing_mode}
+        )
 
+@app.get("/setcolor")
+async def set_color():
+    global current_viewing_mode, alt_viewing_mode
+    current_viewing_mode, alt_viewing_mode = alt_viewing_mode, current_viewing_mode
+    return RedirectResponse("/")
 
 @app.get("/remaining")
 async def remaining():
@@ -299,7 +308,6 @@ async def remaining():
 
 @app.get("/logs")
 async def get_logs():
-    time.sleep(1)
     logs = displaying_logs(LOG_FILE, 500)
     logs = [line.rstrip() for line in logs]
     return {"lines": logs}
@@ -307,21 +315,18 @@ async def get_logs():
 
 @app.get("/scraping_logs")
 async def displaying_scraping_logs():
-    time.sleep(1)
     scraping_logs = displaying_logs(SCRAPING_LOG_FILE)
     return {"lines": scraping_logs}
 
 
 @app.get("/ingestion_logs")
 async def displaying_ingestion_logs():
-    time.sleep(1)
     ingestion_logs = displaying_logs(JSON_LOG_FILE, 12)
     return {"lines": ingestion_logs}
 
 
 @app.get("/status")
 async def status():
-    time.sleep(1)
     scraping_status = get_pipeline_status(SCRAPING_LOG_FILE)
     transform_status = get_pipeline_status(JSON_LOG_FILE)
     ingestion_status = get_pipeline_status(INGESTION_LOG_FILE)
@@ -334,7 +339,6 @@ async def status():
 
 @app.get("/file_counts")
 async def file_counts():
-    time.sleep(1)
     try:
         csv_files = os.listdir(DOWNLOAD_FOLDER)
         json_files = os.listdir(LOGSTASH_FOLDER)
