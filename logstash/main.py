@@ -340,7 +340,11 @@ def process_downloaded_files():
 
                     continue
                 
-                write(timestamp_str, PYSPARK_LOG_FILE)
+                if not os.path.exists(raw_file_path):
+                    write_all(f"File not present in folder, skipping transformation: {file}", [LOG_FILE, JSON_LOG_FILE])
+                    continue
+
+                with open(PYSPARK_LOG_FILE, "w") as f: f.write(timestamp_str)
                 write_all(f"Transforming file into JSON: {file}")
                 run_pipeline(raw_file_path, json_output_path)
                 
