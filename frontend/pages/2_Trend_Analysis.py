@@ -205,7 +205,7 @@ def plot_trends(df_pivot, entities_inc, entities_dec, title, max_lines_inc=5, ma
 
 # --- Streamlit UI ---
 st.set_page_config(layout="wide", page_title="GDELT Trend Analysis")
-st.title("GDELT Entity Trend Analysis (via Backend API)")
+st.title("GDELT Entity Trend Analysis")
 
 # --- Sidebar Inputs (Unchanged) ---
 st.sidebar.header("Analysis Parameters")
