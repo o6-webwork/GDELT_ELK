@@ -30,7 +30,7 @@ PYSPARK_LOG_FILE = "./logs/pyspark_log.txt"
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
 
-# Cleans the logs at the start of every session.
+# Cleans the logs / create non-existent files at the start of every session
 for file in [LOG_FILE, SCRAPING_LOG_FILE, INGESTION_LOG_FILE, TIMESTAMP_LOG_FILE, JSON_LOG_FILE, PYSPARK_LOG_FILE]:
     with open(file, "w") as f:
         f.write("")
@@ -375,6 +375,12 @@ def delete_processed_json():
             if es_check_data(filename.split(".")[0]):
                 write_all(f"Loaded JSON file into Elasticsearch: {filename}", [LOG_FILE, JSON_LOG_FILE])
                 file_path = os.path.join(directory, filename)
+                while True:
+                    with open(PYSPARK_LOG_FILE, "r") as f:
+                        timestamp = f.read()
+                    if timestamp not in file_path:
+                        break
+                    
                 os.remove(file_path)
 
 def server_scrape():
