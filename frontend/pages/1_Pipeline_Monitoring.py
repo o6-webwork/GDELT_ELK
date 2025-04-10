@@ -116,10 +116,6 @@ with st.sidebar.expander("ETL Logs (Last 50 lines)"):
     etl_logs = fetch_logs("gdelt_etl", 50)
     st.code("\n".join(etl_logs), language="log")
 
-with st.sidebar.expander("Logstash Logs (Last 50 lines)"):
-    ls_logs = fetch_logs("logstash-plain", 50)  # Assuming log file name is 'logstash-plain'
-    st.code("\n".join(ls_logs), language="log")
-
 # --- Task Control Area ---
 st.subheader("🔧 Manual Tasks")
 
