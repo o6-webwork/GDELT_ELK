@@ -6,7 +6,7 @@ from io import BytesIO
 import threading
 import pytz
 from elasticsearch import Elasticsearch
-
+import time
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -299,6 +299,7 @@ async def remaining():
 
 @app.get("/logs")
 async def get_logs():
+    time.sleep(1)
     logs = displaying_logs(LOG_FILE, 500)
     logs = [line.rstrip() for line in logs]
     return {"lines": logs}
@@ -306,18 +307,21 @@ async def get_logs():
 
 @app.get("/scraping_logs")
 async def displaying_scraping_logs():
+    time.sleep(1)
     scraping_logs = displaying_logs(SCRAPING_LOG_FILE)
     return {"lines": scraping_logs}
 
 
 @app.get("/ingestion_logs")
 async def displaying_ingestion_logs():
+    time.sleep(1)
     ingestion_logs = displaying_logs(JSON_LOG_FILE, 12)
     return {"lines": ingestion_logs}
 
 
 @app.get("/status")
 async def status():
+    time.sleep(1)
     scraping_status = get_pipeline_status(SCRAPING_LOG_FILE)
     transform_status = get_pipeline_status(JSON_LOG_FILE)
     ingestion_status = get_pipeline_status(INGESTION_LOG_FILE)
@@ -330,6 +334,7 @@ async def status():
 
 @app.get("/file_counts")
 async def file_counts():
+    time.sleep(1)
     try:
         csv_files = os.listdir(DOWNLOAD_FOLDER)
         json_files = os.listdir(LOGSTASH_FOLDER)

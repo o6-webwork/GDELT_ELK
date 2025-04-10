@@ -14,6 +14,7 @@ import glob
 import shutil
 import datetime, pytz
 from elasticsearch import Elasticsearch
+import time
 
 # Constants
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
@@ -368,6 +369,7 @@ def delete_processed_json():
     directory="./logstash_ingest_data/json"
 
     while True:
+        time.sleep(10)
         all_json = [i for i in os.listdir(directory) if ".json" in i]
         for filename in all_json:
             if es_check_data(filename.split(".")[0]):
