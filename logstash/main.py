@@ -346,12 +346,18 @@ def process_downloaded_files():
 
                 with open(PYSPARK_LOG_FILE, "w") as f: f.write(timestamp_str)
                 write_all(f"Transforming file into JSON: {file}")
-                run_pipeline(raw_file_path, json_output_path)
+                try:
+                    run_pipeline(raw_file_path, json_output_path)
+                    
+                except FileNotFoundError as e:
+                    write_all(f"File not present in folder, skipping transformation: {file}", [LOG_FILE, JSON_LOG_FILE])
                 
                 # Remove the CSV file using its full path
                 write_all(f"Transformed file into JSON: {file}")
                 with open(PYSPARK_LOG_FILE, "w") as f: f.write("")
-                os.remove(raw_file_path)
+                time.sleep(1)
+                if os.path.exists(raw_file_path):
+                    os.remove(raw_file_path)
                 write_all(f"Deleted processed CSV file: {raw_file_path}", [LOG_FILE, JSON_LOG_FILE])
 
                 # Cleaning the corresponding JSON folder
