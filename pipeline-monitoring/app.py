@@ -3,12 +3,20 @@ import datetime
 import requests
 import zipfile
 from io import BytesIO
-from flask import Flask, render_template, jsonify, request
 import threading
 import pytz
 from elasticsearch import Elasticsearch
 
-app = Flask(__name__)
+from fastapi import FastAPI, Request, Form, HTTPException
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+
+# Create FastAPI app instance
+app = FastAPI()
+
+# Setup Jinja2 template directory
+templates = Jinja2Templates(directory="templates")
 
 # Path directories and additional parameters
 LOG_FILE = os.environ.get("LOG_FILE_PATH", "./logs/log.txt")
@@ -33,7 +41,7 @@ archive_cancel_event = threading.Event()
 patching_progress = {"percent": 0, "message": ""}
 archive_progress = {"percent": 0, "message": ""}
 
-# Global list to track files downloaded/created during task
+# Global lists to track downloaded/created files during tasks
 patching_downloaded_files = []
 archive_downloaded_files = []
 
@@ -46,17 +54,18 @@ def write(content):
     """
     if not content:
         return
-
     timezone = pytz.timezone("Asia/Singapore")
     current_time_gmt8 = datetime.datetime.now(timezone)
     current_time = current_time_gmt8.strftime("%Y-%m-%d %H:%M:%S") + ": "
     with open(LOG_FILE, "a") as f:
         f.write(current_time + content + "\n")
 
+
 def displaying_logs(file_path, n=6):
     with open(file_path, "r") as f:
         lines = [line for line in f.readlines() if line.strip()]
     return lines[-n:]
+
 
 def get_remaining_time():
     """
@@ -65,7 +74,6 @@ def get_remaining_time():
     """
     try:
         with open(TIMESTAMP_LOG_FILE, "r") as f:
-            # Read the last non-empty line
             lines = [line.strip() for line in f if line.strip()]
             if not lines:
                 return None
@@ -80,6 +88,7 @@ def get_remaining_time():
         print(f"Error reading log file: {e}")
         return None
 
+
 def get_pipeline_status(respective_log_file):
     """
     Determines the pipeline status by parsing the provided log file.
@@ -87,39 +96,38 @@ def get_pipeline_status(respective_log_file):
     """
     status = "running"
     with open(respective_log_file, "r") as f:
-        # Read all non-empty lines, then take the last 5
         lines = [line.strip() for line in f if line.strip()]
     last_lines = lines[-5:]
-
     for line in last_lines:
         if "error" in line.lower():
             return "error"
-        # Mark as running if the pipeline keyword appears without error
         status = "running"
-
     return status
 
+
 def es_client_setup():
-    '''
+    """
     Sets up client to connect to Elasticsearch.
-    '''
+    """
     es_client = Elasticsearch(
         "https://es01:9200",
         basic_auth=("elastic", "changeme"),
-        verify_certs=True, # Set to True if using trusted certs
+        verify_certs=True,  # Set to True if using trusted certs
         ca_certs="./certs/ca/ca.crt",
         request_timeout=30
     )
     return es_client
 
+
 def es_check_data(timestamp_str):
-    '''
+    """
     Queries Elasticsearch to check if data for given timestamp exists.
-    '''
+    """
     client = es_client_setup()
     query_body = {"query": {"term": {"GkgRecordId.Date": timestamp_str}}}
     response = client.count(index='gkg*', body=query_body, request_timeout=10)
     return response.get('count', 0) > 0
+
 
 def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdeltv2/"):
     """
@@ -138,14 +146,12 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
     current = start
     write(f"Patching files from {look_back_days} days ago...")
     
-    # Reset progress and cancellation flag at start
     patching_progress = {"percent": 0, "message": "Task started..."}
     patching_cancel_event.clear()
     total_steps = int((now - start).total_seconds() / (15*60)) + 1
     step_count = 0
 
     while current <= now:
-        # If cancellation has been requested, log and update progress then exit the loop.
         if patching_cancel_event.is_set():
             write("Patching task cancelled by user.")
             patching_progress["message"] = "Patching task cancelled."
@@ -154,9 +160,7 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
         timestamp = current.strftime("%Y%m%d%H%M%S")
         local_filename = f"{timestamp}.gkg.csv"
 
-        # Check if file has already been downloaded/processed
-        if local_filename in os.listdir(DOWNLOAD_FOLDER) \
-            or es_check_data(timestamp) or f"{timestamp}.json" in os.listdir("./logstash_ingest_data/json"):
+        if local_filename in os.listdir(DOWNLOAD_FOLDER) or es_check_data(timestamp) or f"{timestamp}.json" in os.listdir("./logstash_ingest_data/json"):
             write(f"Extraction skipped: {local_filename} already exists.")
             current += datetime.timedelta(minutes=15)
             step_count += 1
@@ -171,7 +175,6 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
             if response.status_code == 200:
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
                 zip_file.extract(local_filename, DOWNLOAD_FOLDER)
-                # Track the file as part of this task's downloads
                 patching_downloaded_files.append(local_filename)
                 num_files_success += 1
                 write(f"Extracting patching file completed: {local_filename}.")
@@ -195,6 +198,7 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
                      Number of patching file errors: {num_files_error}
                      Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
     write(msg)
+
 
 def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdeltproject.org/gdeltv2/"):
     """
@@ -220,7 +224,6 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
     current = start
     write(f"Patching files from {start_date_str} to {end_date_str}...")
     
-    # Reset progress and cancellation flag at start
     archive_progress = {"percent": 0, "message": "Task started..."}
     archive_cancel_event.clear()
     total_steps = int((end - start).total_seconds() / (15*60)) + 1
@@ -234,8 +237,7 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
 
         timestamp = current.strftime("%Y%m%d%H%M%S")
         local_filename = f"{timestamp}.gkg.csv"
-        if local_filename in os.listdir(DOWNLOAD_FOLDER) or es_check_data(timestamp) \
-            or f"{timestamp}.json" in os.listdir("./logstash_ingest_data/json"):
+        if local_filename in os.listdir(DOWNLOAD_FOLDER) or es_check_data(timestamp) or f"{timestamp}.json" in os.listdir("./logstash_ingest_data/json"):
             write(f"Extraction skipped: {local_filename} already exists.")
             current += datetime.timedelta(minutes=15)
             step_count += 1
@@ -250,7 +252,6 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
             if response.status_code == 200:
                 zip_file = zipfile.ZipFile(BytesIO(response.content))
                 zip_file.extract(local_filename, DOWNLOAD_FOLDER)
-                # Track the file as part of this task's downloads
                 archive_downloaded_files.append(local_filename)
                 num_files_success += 1
                 write(f"Extracting archive file completed: {local_filename}.")
@@ -274,178 +275,165 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
                      Number of archive file errors: {num_files_error}
                      Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
     write(msg)
-    
 
-############################ Flask Routes ############################
 
-@app.route('/')
-def dashboard():
+############################ FastAPI Routes ############################
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard(request: Request):
     if os.path.exists(LOG_FILE):
         with open(LOG_FILE, "r") as f:
             data = f.read().split("\n")
     else:
         data = []
-    return render_template("dashboard.html", data=data)
+    return templates.TemplateResponse("dashboard.html", {"request": request, "data": data})
 
-@app.route("/remaining")
-def remaining():
+
+@app.get("/remaining")
+async def remaining():
     remaining_time = get_remaining_time()
     if remaining_time is None:
-        return jsonify(error="Error reading log file"), 500
-    return jsonify(remaining=remaining_time)
+        return JSONResponse(content={"error": "Error reading log file"}, status_code=500)
+    return {"remaining": remaining_time}
 
-@app.route('/logs')
-def get_logs():
+
+@app.get("/logs")
+async def get_logs():
     logs = displaying_logs(LOG_FILE, 500)
     logs = [line.rstrip() for line in logs]
-    return jsonify({"lines": logs})
+    return {"lines": logs}
 
-@app.route('/scraping_logs', methods=['GET'])
-def displaying_scraping_logs():
+
+@app.get("/scraping_logs")
+async def displaying_scraping_logs():
     scraping_logs = displaying_logs(SCRAPING_LOG_FILE)
-    return jsonify({"lines": scraping_logs})
+    return {"lines": scraping_logs}
 
-@app.route('/ingestion_logs', methods=['GET'])
-def displaying_ingestion_logs():
-    ingestion_logs = displaying_logs(JSON_LOG_FILE,12)
-    return jsonify({"lines": ingestion_logs})
 
-@app.route('/status', methods=['GET'])
-def status():
-    # Note: the extract, transform, and load statuses are determined by log files.
-    # For brevity, these remain unchanged.
+@app.get("/ingestion_logs")
+async def displaying_ingestion_logs():
+    ingestion_logs = displaying_logs(JSON_LOG_FILE, 12)
+    return {"lines": ingestion_logs}
+
+
+@app.get("/status")
+async def status():
     scraping_status = get_pipeline_status(SCRAPING_LOG_FILE)
     transform_status = get_pipeline_status(JSON_LOG_FILE)
     ingestion_status = get_pipeline_status(INGESTION_LOG_FILE)
-    return jsonify({
+    return {
         "extract": scraping_status,
         "transform": transform_status,
         "load": ingestion_status
-    })
+    }
 
-#Counter for CSV and JSON files in the download folder
-@app.route('/file_counts', methods=['GET'])
-def file_counts():
+
+@app.get("/file_counts")
+async def file_counts():
     try:
         csv_files = os.listdir(DOWNLOAD_FOLDER)
         json_files = os.listdir(LOGSTASH_FOLDER)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return JSONResponse(content={"error": str(e)}, status_code=500)
     csv_count = sum(1 for f in csv_files if f.lower().endswith(".csv"))
     json_count = sum(1 for f in json_files if f.lower().endswith(".json"))
-    return jsonify({"csv_count": csv_count, "json_count": json_count})
+    return {"csv_count": csv_count, "json_count": json_count}
 
-# Start patching task in background thread
-@app.route('/patching', methods=['POST'])
-def patch_missing():
-    look_back_days = request.form.get("look_back_days", 3)
+
+@app.post("/patching")
+async def patch_missing(look_back_days: int = Form(3)):
     global patching_thread, patching_cancel_event, patching_progress
-    patching_cancel_event.clear()  # Reset any previous cancellation
-    # Reset progress before starting the task
+    patching_cancel_event.clear()  # Reset previous cancellation
     patching_progress = {"percent": 0, "message": "Task started..."}
     patching_thread = threading.Thread(target=patching_task, args=(look_back_days,))
     patching_thread.start()
-    return jsonify({"status":"running", "message": "Patching started", "look_back_days": look_back_days})
+    return {"status": "running", "message": "Patching started", "look_back_days": look_back_days}
 
-# Cancel the patching task
-@app.route('/patch_cancel', methods=['POST'])
-def patch_cancel():
+
+@app.post("/patch_cancel")
+async def patch_cancel():
     global patching_cancel_event
     patching_cancel_event.set()
-    return jsonify({"message": "Patching cancellation initiated."})
+    return {"message": "Patching cancellation initiated."}
 
-#Stop and delete for patching task
-@app.route('/patch_stop_delete', methods=['POST'])
-def patch_stop_and_delete():
+
+@app.post("/patch_stop_delete")
+async def patch_stop_and_delete():
     global patching_cancel_event, patching_downloaded_files, patching_progress
-    # Cancel the running patching task
     patching_cancel_event.set()
-    
     deleted_files = []
     try:
-        # Iterate through the list of files downloaded during this task
         for filename in patching_downloaded_files:
             file_path = os.path.join(DOWNLOAD_FOLDER, filename)
-            with open(PYSPARK_LOG_FILE, "r") as f: curr = f.read()
+            with open(PYSPARK_LOG_FILE, "r") as f:
+                curr = f.read()
             if os.path.exists(file_path) and curr not in file_path:
                 os.remove(file_path)
                 deleted_files.append(filename)
-        # Clear the tracking list after deletion
         patching_downloaded_files = []
         patching_progress["message"] = "Patching task cancelled and downloaded files deleted."
         write("Patching task cancelled and downloaded files deleted by user request.")
-        return jsonify({"message": f"Patching cancelled. Deleted files: {', '.join(deleted_files)}"})
+        return {"message": f"Patching cancelled. Deleted files: {', '.join(deleted_files)}"}
     except Exception as e:
         write(f"Error during deletion of patch files: {e}")
         patching_progress["message"] = "Patching cancelled, but an error occurred during file deletion."
-        return jsonify({"message": f"Patching cancelled, but an error occurred during file deletion: {e}"}), 500
+        return JSONResponse(content={"message": f"Patching cancelled, but an error occurred during file deletion: {e}"}, status_code=500)
 
-# Start archival download task in background thread
-@app.route('/archive', methods=['POST'])
-def archive_download():
-    start_date = request.form.get('start_date')
-    end_date = request.form.get('end_date')
+
+@app.post("/archive")
+async def archive_download(start_date: str = Form(...), end_date: str = Form(...)):
     try:
         datetime.datetime.strptime(start_date, "%Y-%m-%d")
         datetime.datetime.strptime(end_date, "%Y-%m-%d")
     except Exception as e:
-        return jsonify({"error": "Invalid date format."})
+        return JSONResponse(content={"error": "Invalid date format."})
     global archive_thread, archive_cancel_event, archive_progress
-    archive_cancel_event.clear()  # Reset any previous cancellation
+    archive_cancel_event.clear()
     archive_progress = {"percent": 0, "message": "Task started..."}
     archive_thread = threading.Thread(target=patching_task_range, args=(start_date, end_date))
     archive_thread.start()
-    return jsonify({"message": "Archive download started", "start_date": start_date, "end_date": end_date})
+    return {"message": "Archive download started", "start_date": start_date, "end_date": end_date}
 
-# Cancel the archival download task
-@app.route('/archive_cancel', methods=['POST'])
-def archive_cancel():
+
+@app.post("/archive_cancel")
+async def archive_cancel():
     global archive_cancel_event
     archive_cancel_event.set()
-    return jsonify({"message": "Archive download cancellation initiated."})
+    return {"message": "Archive download cancellation initiated."}
 
-#Stop and delete for archival download task
-@app.route('/archive_stop_delete', methods=['POST'])
-def archive_stop_and_delete():
+
+@app.post("/archive_stop_delete")
+async def archive_stop_and_delete():
     global archive_cancel_event, archive_downloaded_files, archive_progress
-    # Cancel the running archive task
     archive_cancel_event.set()
-    
     deleted_files = []
     try:
-        # Iterate through the list of files downloaded during this task
         for filename in archive_downloaded_files:
             file_path = os.path.join(DOWNLOAD_FOLDER, filename)
             if os.path.exists(file_path):
                 os.remove(file_path)
                 deleted_files.append(filename)
-        # Clear the tracking list after deletion
         archive_downloaded_files = []
         archive_progress["message"] = "Archive task cancelled and downloaded files deleted."
         write("Archive task cancelled and downloaded files deleted by user request.")
-        return jsonify({"message": f"Archive cancelled. Deleted files: {', '.join(deleted_files)}"})
+        return {"message": f"Archive cancelled. Deleted files: {', '.join(deleted_files)}"}
     except Exception as e:
         write(f"Error during deletion of archive files: {e}")
         archive_progress["message"] = "Archive cancelled, but an error occurred during file deletion."
-        return jsonify({"message": f"Archive cancelled, but an error occurred during file deletion: {e}"}), 500
+        return JSONResponse(content={"message": f"Archive cancelled, but an error occurred during file deletion: {e}"}, status_code=500)
 
-@app.route('/get_archive_files', methods=['POST'])
-def get_archive_files():
-    """
-    For compatibility with the previous implementation,
-    this route now only lists downloaded files after the archive task runs.
-    """
-    start_date = request.form.get('start_date')
-    end_date = request.form.get('end_date')
+
+@app.post("/get_archive_files")
+async def get_archive_files(start_date: str = Form(...), end_date: str = Form(...)):
     try:
         datetime.datetime.strptime(start_date, "%Y-%m-%d")
         datetime.datetime.strptime(end_date, "%Y-%m-%d")
     except Exception as e:
-        return jsonify({"files": [], "error": "Invalid date format."})
+        return {"files": [], "error": "Invalid date format."}
     try:
         all_files = os.listdir(DOWNLOAD_FOLDER)
     except Exception as e:
-        return jsonify({"files": [], "error": str(e)})
+        return {"files": [], "error": str(e)}
     
     available_files = []
     start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
@@ -460,19 +448,21 @@ def get_archive_files():
         except Exception:
             continue
     
-    return jsonify({"files": available_files})
+    return {"files": available_files}
 
-# New endpoints for progress tracking
 
-@app.route('/patch_progress', methods=['GET'])
-def patch_progress_endpoint():
-    return jsonify(patching_progress)
+@app.get("/patch_progress")
+async def patch_progress_endpoint():
+    return patching_progress
 
-@app.route('/archive_progress', methods=['GET'])
-def archive_progress_endpoint():
-    return jsonify(archive_progress)
+
+@app.get("/archive_progress")
+async def archive_progress_endpoint():
+    return archive_progress
+
 
 ############################ Main ############################
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=7979, debug=True)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app:app", host="0.0.0.0", port=7979, reload=True)

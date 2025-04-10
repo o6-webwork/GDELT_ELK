@@ -20,6 +20,8 @@ RUN pip install --upgrade pip
 
 RUN pip install --upgrade setuptools wheel
 
+RUN pip install python-multipart
+
 RUN pip install -r requirements.txt
 
 COPY . .
