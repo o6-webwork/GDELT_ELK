@@ -102,7 +102,7 @@ def process_data(buckets):
     st.write("Data processed successfully!") # User feedback
     return pivot_df
 
-# --- MK Analysis (closer to original) ---
+# --- MK Analysis (closer to original + DEBUGGING) ---
 def run_mk_analysis(df, top_n_inc=10, top_n_dec=10, include_decreasing=False):
     """Runs Mann-Kendall tests, filtering for increasing and optionally decreasing trends."""
     st.write("Running Mann-Kendall analysis...") # User feedback
@@ -112,9 +112,9 @@ def run_mk_analysis(df, top_n_inc=10, top_n_dec=10, include_decreasing=False):
 
     results_orig_inc, results_orig_dec = {}, {}
     results_hamed_inc, results_hamed_dec = {}, {}
+    debug_hamed_results = {} # Store raw Hamed results for debugging
 
     num_entities = len(df.columns)
-    # Add progress bar like original
     progress_bar = st.progress(0.0)
     status_text = st.empty()
     status_text.text(f"Analyzing 0/{num_entities} entities...")
@@ -122,6 +122,12 @@ def run_mk_analysis(df, top_n_inc=10, top_n_dec=10, include_decreasing=False):
     for i, entity in enumerate(df.columns):
         series = df[entity]
         update_text = f"Analyzing entity {i+1}/{num_entities}: {entity}"
+        series_length = len(series) # Get length before potential modification by MK tests
+
+        # --- DEBUG: Print Series Length ---
+        # Use logger instead of st.write inside loop for less clutter
+        logger.info(f"Analyzing '{entity}': Series Length = {series_length}")
+        # --- END DEBUG ---
 
         # Skip analysis if not enough data points like original
         if series.count() < 3 or series.nunique() < 2:
@@ -134,34 +140,57 @@ def run_mk_analysis(df, top_n_inc=10, top_n_dec=10, include_decreasing=False):
         try:
             # --- Original Test ---
             result_orig = mk.original_test(series)
-            # Check significance (h=True) and slope direction like original
             if result_orig.h and result_orig.trend == 'increasing' and result_orig.slope > 0:
                 results_orig_inc[entity] = result_orig
             elif include_decreasing and result_orig.h and result_orig.trend == 'decreasing' and result_orig.slope < 0:
                 results_orig_dec[entity] = result_orig
 
-            # --- Hamed-Rao Test (only if enough data, like original) ---
-            if len(series) >= 10: # Original code implicitly used this via library default
+            # --- Hamed-Rao Test ---
+            # Check length requirement
+            if series_length >= 10: # Check original length
                 result_hamed = mk.hamed_rao_modification_test(series)
+                # --- DEBUG: Store Raw Hamed Result ---
+                debug_hamed_results[entity] = {
+                    'trend': result_hamed.trend, 'h': result_hamed.h,
+                    'p': result_hamed.p, 'slope': result_hamed.slope
+                }
+                # --- END DEBUG ---
+
+                # Filter based on significance and slope
                 if result_hamed.h and result_hamed.trend == 'increasing' and result_hamed.slope > 0:
                     results_hamed_inc[entity] = result_hamed
                 elif include_decreasing and result_hamed.h and result_hamed.trend == 'decreasing' and result_hamed.slope < 0:
                     results_hamed_dec[entity] = result_hamed
-            # else: pass # No Hamed-Rao if < 10 points
+            else:
+                 # --- DEBUG: Log why Hamed-Rao was skipped ---
+                 logger.info(f"Skipping Hamed-Rao for '{entity}': Length ({series_length}) < 10")
+                 debug_hamed_results[entity] = {'status': 'skipped (length < 10)'}
+                 # --- END DEBUG ---
 
         except Exception as e:
-            # Use logger for detailed error, st.warning for user
             logger.warning(f"MK analysis failed for entity '{entity}': {e}", exc_info=True)
             st.warning(f"Could not analyze entity '{entity}'. Error: {e}")
 
-        # Update progress bar
         progress_bar.progress((i + 1) / num_entities)
 
-    # Clear progress elements like original
     progress_bar.empty()
     status_text.text("Analysis complete!")
 
-    # Sort results like original
+    # --- DEBUG: Display Raw Hamed-Rao results that didn't make the cut ---
+    st.write("--- DEBUG: Raw Hamed-Rao Results (Showing All Attempted) ---")
+    skipped_count = sum(1 for r in debug_hamed_results.values() if r.get('status') == 'skipped (length < 10)')
+    st.write(f"Entities skipped for Hamed-Rao due to length < 10: {skipped_count}")
+    # Display results for entities where test was run but might not have been significant
+    hamed_run_results = {k: v for k, v in debug_hamed_results.items() if 'status' not in v}
+    if hamed_run_results:
+         df_debug_hamed = pd.DataFrame.from_dict(hamed_run_results, orient='index')
+         st.dataframe(df_debug_hamed)
+    else:
+         st.write("No Hamed-Rao tests were executed (likely all series < 10 points).")
+    st.write("--- END DEBUG ---")
+    # --- END DEBUG ---
+
+    # Sort significant results like original
     sorted_results_orig_inc = sorted(results_orig_inc.items(), key=lambda item: item[1].slope, reverse=True)
     sorted_results_orig_dec = sorted(results_orig_dec.items(), key=lambda item: item[1].slope, reverse=False)
     sorted_results_hamed_inc = sorted(results_hamed_inc.items(), key=lambda item: item[1].slope, reverse=True)

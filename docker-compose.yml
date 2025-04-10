@@ -223,7 +223,8 @@ services:
       es01:
         condition: service_healthy
     volumes:
-      - logdata:/app/logs # Shared log volume
+      - logdata:/app/logs
+      - csvfiles:/app/csv # Shared log volume
     ports:
       - "8000:8000"
     environment:
