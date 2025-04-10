@@ -1,10 +1,24 @@
-# Ignore contents of the json ingest directory...
-logstash/logstash_ingest_data/json/*
-# ...but DO NOT ignore the .gitkeep file inside it
-!logstash/logstash_ingest_data/json/.gitkeep
-logstash/csv
-logstash/logs
+# .gitignore
 
-# Ignore Env var
-.env
-*/__pycache__
+# Ignore Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Ignore Env files
+.env*
+
+# Ignore Logstash runtime state files at the data directory level
+backend/etl_pipeline/logstash_ingest_data/sincedb.txt
+backend/etl_pipeline/logstash_ingest_data/uuid
+backend/etl_pipeline/logstash_ingest_data/.lock
+
+# Ignore ALL files inside the json data directory...
+backend/etl_pipeline/logstash_ingest_data/json/*
+
+# ... EXCEPT the .gitkeep file, allowing the directory to be tracked
+!backend/etl_pipeline/logstash_ingest_data/json/.gitkeep
+
+# Optionally ignore the CSV download folder if it's within the repo
+# csv/

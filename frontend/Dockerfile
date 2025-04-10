@@ -1,7 +1,7 @@
 # gdelt_app/frontend/Dockerfile
 
 # Use an official Python runtime as a parent image
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 # Set the working directory in the container
 WORKDIR /app
@@ -25,4 +25,4 @@ EXPOSE 8501
 # Use healthcheck for streamlit: https://docs.streamlit.io/knowledge-base/tutorials/deploy/docker#add-a-healthcheck
 HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
 
-CMD ["streamlit", "run", "analysis.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["streamlit", "run", "Home.py", "--server.port=8501", "--server.address=0.0.0.0"]
