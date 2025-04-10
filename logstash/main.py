@@ -375,12 +375,14 @@ def delete_processed_json():
             if es_check_data(filename.split(".")[0]):
                 write_all(f"Loaded JSON file into Elasticsearch: {filename}", [LOG_FILE, JSON_LOG_FILE])
                 file_path = os.path.join(directory, filename)
+
+                # Stop deletion until Spark has processed the file
                 while True:
                     with open(PYSPARK_LOG_FILE, "r") as f:
                         timestamp = f.read()
                     if timestamp not in file_path:
                         break
-                    
+
                 os.remove(file_path)
 
 def server_scrape():
