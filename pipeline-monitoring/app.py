@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 import uvicorn
 from fastapi.responses import RedirectResponse
+from typing import List
+from starlette.responses import Response
 
 # Create FastAPI app instance
 app = FastAPI()
@@ -19,6 +21,7 @@ app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
 # Path directories and additional parameters
+# Constants
 LOG_FILE = os.environ.get("LOG_FILE_PATH", "./logs/log.txt")
 SCRAPING_LOG_FILE = os.environ.get("SCRAPING_FILE_PATH", "./logs/scraping_log.txt")
 INGESTION_LOG_FILE = os.environ.get("INGESTION_FILE_PATH", "./logs/ingestion_log.txt")
@@ -27,15 +30,16 @@ JSON_LOG_FILE = os.environ.get("JSON_FILE_PATH", "./logs/json_log.txt")
 DOWNLOAD_FOLDER = "./csv"
 LOGSTASH_FOLDER = "./logstash_ingest_data/json"
 PYSPARK_LOG_FILE = "./logs/pyspark_log.txt"
+INTERVAL = 15 * 60  # 15 minutes delay
+BASE_URL = "http://data.gdeltproject.org/gdeltv2/"
+
+# Variables
 current_viewing_mode = "light"
 alt_viewing_mode = "dark"
-
-INTERVAL = 15 * 60  # 15 minutes delay
 
 # Global variables for background tasks and cancellation events
 patching_thread = None
 patching_cancel_event = threading.Event()
-
 archive_thread = None
 archive_cancel_event = threading.Event()
 
@@ -47,11 +51,14 @@ archive_progress = {"percent": 0, "message": ""}
 patching_downloaded_files = []
 archive_downloaded_files = []
 
-
 ############################ Helper Functions ############################
-def write(content):
+def write(content: str) -> None:
     """
-    Append log data into the log file with a current timestamp (Asia/Singapore).
+    Append log data into the log file,
+    and adds a current timestamp at front of log message (Asia/Singapore).
+
+    Args:
+        content (str): Message log to be appended at the end of relevant log file.
     """
     if not content:
         return
@@ -61,23 +68,36 @@ def write(content):
     with open(LOG_FILE, "a") as f:
         f.write(current_time + content + "\n")
 
+def displaying_logs(file_path: str, n: int = 6) -> List[str]:
+    '''
+    Displays the contents of the specified log file.
+    Only gets the first n messages.
 
-def displaying_logs(file_path, n=6):
+    Args:
+        file_path (str): Full file path of log file to read from.
+        n (int, optional): Number of messages to get from the log file.
+
+    Returns:
+        List[str]: List of log texts from the log file.
+    '''
     with open(file_path, "r") as f:
         lines = [line for line in f.readlines() if line.strip()]
     return lines[-n:]
 
-
-def get_remaining_time():
+def get_remaining_time() -> str | None:
     """
     Reads the TIMESTAMP_LOG_FILE to get the latest run timestamp,
     then calculates and returns the remaining time until the next run.
+
+    Returns:
+        str|None: Either a string containing the time recorded in the log file,
+                    or a Nonetype variable due to premature ending of function from receiving an error.
     """
     try:
         with open(TIMESTAMP_LOG_FILE, "r") as f:
             lines = [line.strip() for line in f if line.strip()]
             if not lines:
-                return None
+                return
             last_timestamp = lines[-1].rstrip(':')
             last_run_dt = datetime.datetime.strptime(last_timestamp, "%Y-%m-%d %H:%M:%S")
             next_run_dt = last_run_dt + datetime.timedelta(seconds=INTERVAL)
@@ -87,13 +107,17 @@ def get_remaining_time():
             return f"{minutes} min {seconds} sec"
     except Exception as e:
         print(f"Error reading log file: {e}")
-        return None
+        return
 
-
-def get_pipeline_status(respective_log_file):
+def get_pipeline_status(respective_log_file: str) -> str:
     """
     Determines the pipeline status by parsing the provided log file.
-    Returns 'running' or 'error'.
+
+    Args:
+        respective_log_file (str): File path to target log file to check if the process has encountered any errors.
+
+    Returns:
+        str: A status variable. 'running' if there are no errors encountered, and 'error' otherwise.
     """
     status = "running"
     with open(respective_log_file, "r") as f:
@@ -105,10 +129,12 @@ def get_pipeline_status(respective_log_file):
         status = "running"
     return status
 
-
-def es_client_setup():
+def es_client_setup() -> Elasticsearch:
     """
     Sets up client to connect to Elasticsearch.
+
+    Returns:
+        A client instance that is connected to the Elasticsearch server.
     """
     es_client = Elasticsearch(
         "https://es01:9200",
@@ -119,10 +145,15 @@ def es_client_setup():
     )
     return es_client
 
-
-def es_check_data(timestamp_str):
+def es_check_data(timestamp_str: str) -> bool:
     """
     Queries Elasticsearch to check if data for given timestamp exists.
+
+    Args:
+        timestamp_str (str): Timestamp string of target file to be checked against.
+
+    Returns:
+        bool: True if data with timestamp already exists in Elasticsearch, and False otherwise.
     """
     client = es_client_setup()
     query_body = {"query": {"term": {"GkgRecordId.Date": timestamp_str}}}
@@ -130,11 +161,16 @@ def es_check_data(timestamp_str):
     return response.get('count', 0) > 0
 
 
-def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdeltv2/"):
+def patching_task(look_back_days: int = 3, BASE_URL: str = BASE_URL) -> None:
     """
     Downloads CSV files from the GDELT archive based on a look-back period.
     Checks for cancellation at each 15-minute interval.
     Updates patching_progress with the percent complete.
+
+    Args:
+        look_back_days (int): Number of days to look back by from the current date,
+                              so as to start patching process.
+        BASE_URL (str, optional): URL to query and download CSV zip files from.
     """
     global patching_progress
     num_files_success, num_files_error = 0, 0
@@ -170,7 +206,7 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
             continue
 
         write(f"Extracting patching file: {local_filename}...")
-        file_url = f"{base_url}{timestamp}.gkg.csv.zip"
+        file_url = f"{BASE_URL}{timestamp}.gkg.csv.zip"
         try:
             response = requests.get(file_url, stream=True, timeout=10)
             if response.status_code == 200:
@@ -200,12 +236,16 @@ def patching_task(look_back_days=3, base_url="http://data.gdeltproject.org/gdelt
                      Extraction status:  {100*(num_files_success / (num_files_error + num_files_success)):.2f}% SUCCESSFUL'''
     write(msg)
 
-
-def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdeltproject.org/gdeltv2/"):
+def patching_task_range(start_date_str: str, end_date_str: str, BASE_URL: str = BASE_URL) -> None:
     """
     Downloads CSV files from the GDELT archive within a custom date range.
     Checks for cancellation requests during the download process.
     Updates archive_progress with the percent complete.
+
+    Args:
+        start_date_str (str): The date for which to start querying and downloading CSV files from.
+        end_date_str (str): The date for which to stop querying and downloading files.
+        BASE_URL (str, optional): URL to query and download CSV zip files from.
     """
     global archive_progress
     num_files_success, num_files_error = 0, 0
@@ -247,7 +287,7 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
             continue
 
         write(f"Extracting archive file: {local_filename}...")
-        file_url = f"{base_url}{timestamp}.gkg.csv.zip"
+        file_url = f"{BASE_URL}{timestamp}.gkg.csv.zip"
         try:
             response = requests.get(file_url, stream=True, timeout=10)
             if response.status_code == 200:
@@ -280,7 +320,17 @@ def patching_task_range(start_date_str, end_date_str, base_url="http://data.gdel
 
 ############################ FastAPI Routes ############################
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def dashboard(request: Request) -> Response:
+    '''
+    Serves the main dashboard page as an HTML response.
+
+    Args:
+        request (Request): The HTTP request object, required by the Jinja2 template engine.
+
+    Returns:
+        Response: A rendered HTML page displaying log data and viewing mode options. 
+        If the log file is missing, an empty data set is passed to the template.
+    '''
     if os.path.exists(LOG_FILE):
         with open(LOG_FILE, "r") as f:
             data = f.read().split("\n")
@@ -292,40 +342,76 @@ async def dashboard(request: Request):
         )
 
 @app.get("/setcolor")
-async def set_color():
+async def set_color() -> RedirectResponse:
+    '''
+    Switches between dark and light mode for the web app.
+
+    Returns:
+        RedirectResponse: Redirects user back to the dashboard page.
+    '''
     global current_viewing_mode, alt_viewing_mode
     current_viewing_mode, alt_viewing_mode = alt_viewing_mode, current_viewing_mode
     return RedirectResponse("/")
 
 @app.get("/remaining")
-async def remaining():
+async def remaining() -> dict | JSONResponse:
+    '''
+    Gets the remaining time until the 15 min intermittent downloader for main.py runs again.
+
+    Returns:
+        dict|JSONResponse: If the time is successfully obtained, returns a dictionary containing the remaining time.
+                             Else, returns an erroneous JSON response.
+    '''
     remaining_time = get_remaining_time()
     if remaining_time is None:
         return JSONResponse(content={"error": "Error reading log file"}, status_code=500)
     return {"remaining": remaining_time}
 
-
 @app.get("/logs")
-async def get_logs():
+async def get_logs() -> dict:
+    '''
+    Gets the log data to display on the dashboard in real-time.
+
+    Returns:
+        dict: Log data fed into a dictionary to a variable name.
+    '''
     logs = displaying_logs(LOG_FILE, 500)
     logs = [line.rstrip() for line in logs]
     return {"lines": logs}
 
 
 @app.get("/scraping_logs")
-async def displaying_scraping_logs():
+async def displaying_scraping_logs() -> dict:
+    '''
+    Gets the log data to display on the dashboard in real-time.
+
+    Returns:
+        dict: Log data fed into a dictionary to a variable name.
+    '''
     scraping_logs = displaying_logs(SCRAPING_LOG_FILE)
     return {"lines": scraping_logs}
 
-
 @app.get("/ingestion_logs")
-async def displaying_ingestion_logs():
+async def displaying_ingestion_logs() -> dict:
+    '''
+    Gets the log data to display on the dashboard in real-time.
+
+    Returns:
+        dict: Log data fed into a dictionary to a variable name.
+    '''
     ingestion_logs = displaying_logs(JSON_LOG_FILE, 12)
     return {"lines": ingestion_logs}
 
 
 @app.get("/status")
-async def status():
+async def status() -> dict:
+    '''
+    Constantly checks for any error messages in the log files.
+    Updates the dashboard page accordingly.
+
+    Returns:
+        dict: Statuses of the respective pipelines.
+    '''
     scraping_status = get_pipeline_status(SCRAPING_LOG_FILE)
     transform_status = get_pipeline_status(JSON_LOG_FILE)
     ingestion_status = get_pipeline_status(INGESTION_LOG_FILE)
