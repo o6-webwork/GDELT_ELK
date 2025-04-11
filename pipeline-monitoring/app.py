@@ -419,7 +419,9 @@ async def archive_stop_and_delete():
     try:
         for filename in archive_downloaded_files:
             file_path = os.path.join(DOWNLOAD_FOLDER, filename)
-            if os.path.exists(file_path):
+            with open(PYSPARK_LOG_FILE, "r") as f:
+                curr = f.read()
+            if os.path.exists(file_path) and curr not in file_path:
                 os.remove(file_path)
                 deleted_files.append(filename)
         archive_downloaded_files = []
