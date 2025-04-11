@@ -6,7 +6,6 @@ from io import BytesIO
 import threading
 import pytz
 from elasticsearch import Elasticsearch
-import time
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
