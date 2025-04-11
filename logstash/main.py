@@ -1,19 +1,20 @@
-import threading
-import os
-import requests
-import zipfile
-from io import BytesIO
-from time import sleep
-import os
-from pyspark.sql.functions import col, struct, array_distinct
-from pyspark.sql import SparkSession
-from schemas.gkg_schema import gkg_schema
-from etl.parse_gkg import gkg_parser
-from pyspark.sql.functions import col, concat_ws
+import datetime
 import glob
+import os
+import pytz
+import requests
 import shutil
-import datetime, pytz
+import threading
+import zipfile
 from elasticsearch import Elasticsearch
+from etl.parse_gkg import gkg_parser
+from io import BytesIO
+from pyspark.sql.functions import col, struct, array_distinct
+from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql.functions import col, concat_ws
+from schemas.gkg_schema import gkg_schema
+from time import sleep
+from typing import List
 
 # Constants
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
@@ -26,63 +27,89 @@ JSON_LOG_FILE = "./logs/json_log.txt"
 LOGSTASH_PATH = "./logstash_ingest_data/json"
 PYSPARK_LOG_FILE = "./logs/pyspark_log.txt"
 
+# Initialises subfolders for volume data storage
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
+os.makedirs(LOGSTASH_PATH, exist_ok=True)
 
-# Cleans the logs / create non-existent files at the start of every session
+# Cleans the logs / create non-existent log files
 for file in [LOG_FILE, SCRAPING_LOG_FILE, INGESTION_LOG_FILE, TIMESTAMP_LOG_FILE, JSON_LOG_FILE, PYSPARK_LOG_FILE]:
     with open(file, "w") as f:
         f.write("")
 
 ################################################# Functions for code #################################################
-def write(content, file):
+def write(message: str, file: str) -> None:
     '''
-    Logs messages to a text file, keeping only the first 500 lines of log text.
+    Writes message to the file in the specified file path.
+    Adds a current timestamp to the content string before appending it
+    to the back of the file.
+
+    Args:
+        message (str): String to append to end of log file.
+        file (str): The file path to the required log file.
     '''
-    if not content:
-        return
-    
-    timezone = pytz.timezone("Asia/Singapore")  # or "Asia/Shanghai", "Asia/Manila", etc.
+    timezone = pytz.timezone("Asia/Singapore")
     current_time_gmt8 = datetime.datetime.now(timezone)
-    current_time = current_time_gmt8.strftime("%Y-%m-%d %H:%M:%S") + ": "
+    current_time = current_time_gmt8.strftime("%Y-%m-%d %H:%M:%S") + ": "    
     with open(file, "a", encoding="utf-8") as f:
-        f.write(current_time + content + "\n")
+        f.write(current_time + message + "\n")
 
-def write_all(msg, file_list = [LOG_FILE, INGESTION_LOG_FILE, JSON_LOG_FILE]):
+def write_all(message: str, file_list: list[str] = [LOG_FILE, INGESTION_LOG_FILE, JSON_LOG_FILE]) -> None:
     '''
-    Writes the message to all 3 log files in logstash.
-    '''
-    for FILE in file_list: write(msg, FILE)
+    Writes the message to all files in file_list,
+    using the write(message, file) function.
 
-def get_latest_gdelt_links():
-    """
-    Fetches the latest update file and extracts the download URLs.
-    :return: List of CSV ZIP file URLs
-    """
-    response = requests.get(LAST_UPDATE_URL)
-    
+    Args:
+        message (str): String to append to end of log file.
+        file_list (List[str], optional): List of file paths to write message into. 
+    '''
+    for FILE in file_list: write(message, FILE)
+
+def run_web_query(url: str) -> requests.Response:
+    '''
+    Fetches content from the URL.
+    If URL is unreachable, repeats the process again after 5s
+    until a response is received.
+
+    Args:
+        url (str): URL to fetch data from.
+
+    Returns:
+        requests.Response: The raw HTTP response object returned by `requests.get()`.
+    '''
+    response = requests.get(url)
     if response.status_code != 200:
-        write("Extraction failure: failed to fetch lastupdate.txt", LOG_FILE)
-        return []
-    
+        write_all(f"Error fetching {LAST_UPDATE_URL}; trying again...", [LOG_FILE, SCRAPING_LOG_FILE])
+        sleep(5)
+        return run_web_query(url)
+    return response
+
+def get_latest_gdelt_links() -> List[str]:
+    """
+    Fetches the latest update file (updated every 15 min) from GDELT,
+    and returns all the links from which to download the CSV zip files.
+
+    Returns:
+        List[str]: Links to CSV files for download.
+    """
+    response = run_web_query(LAST_UPDATE_URL)
     lines = response.text.strip().split("\n")
     urls = [line.split()[-1] for line in lines if line.endswith(".zip")]
-    
     return urls
 
-def download_and_extract(url):
+def download_and_extract(url: str) -> None:
     """
-    Downloads a ZIP file from the given URL and extracts CSV files.
-    :param url: The URL to fetch the zip files from
+    Downloads a ZIP file from the given URL,
+    and extracts the CSV files into the DOWNLOAD_FOLDER directory.
+    Checks if the CSV files are in DOWNLOAD_FOLDER before downloading,
+    and only looks for GKG CSV files.
+    Repeat CSV files are logged and skipped.
+
+    Args:
+        url (str): URL to fetch CSV file data from.
     """
-    response = requests.get(url, stream=True)
-    
-    if response.status_code != 200:
-        write_all(f"Extraction failure: {url}", [LOG_FILE, SCRAPING_LOG_FILE])
-        return
-    
+    response = run_web_query(url)
     zip_file = zipfile.ZipFile(BytesIO(response.content))
-    
     for file in zip_file.namelist():
         if file not in os.listdir(DOWNLOAD_FOLDER):
             if file.lower().endswith("gkg.csv"):
@@ -91,24 +118,52 @@ def download_and_extract(url):
                 write_all(f"Extracted latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
         else: write_all(f"Extraction skipped: {file} already exists.", [LOG_FILE, SCRAPING_LOG_FILE])
 
+def restructure_columns(df: DataFrame, column_name: str, fields: List[str]) -> DataFrame:
+    '''
+    Restructures the dataframe column with its desired fields accordingly.
 
-def run_pipeline(raw_file, json_output):
+    Args:
+        df (DataFrame): Spark dataframe to be transformed.
+        column_name (str): The name of the column to transform.
+        fields (List[str]): All fields to be included under the column, eg. Tone, Polarity etc.
+                            Fields will be edited by function to take on the format
+                            `[column_name].[field]` automatically.
+
+    Returns:
+        DataFrame: PySpark dataframe containing the transformed column.
+    '''
+    struct_fields = [col(f"{column_name}.{field}") for field in fields]
+    return df.withColumn(column_name, struct(*struct_fields))
+
+def restructure_array_struct_column(df: DataFrame, column_name: str, fields: list[str]) -> DataFrame:
+    """
+    Creates or replaces a struct column composed of array_distinct-applied fields.
+
+    Args:
+        df (DataFrame): The input Spark DataFrame.
+        column_name (str): The name of the new structured column.
+        fields (List[str]): List of full field paths (e.g., 'V2Locations.FullName').
+
+    Returns:
+        DataFrame: Updated DataFrame with the new structured column.
+    """
+    struct_fields = [array_distinct(col(f"{column_name}.{field}")).alias(field) for field in fields]
+    return df.withColumn(column_name, struct(*struct_fields))
+
+def run_pipeline(raw_file: str, json_output: str) -> None:
     """
     Reads a raw GKG CSV file, transforms each line using gkg_parser,
-    creates a Spark DataFrame with the defined schema, and writes the output as a single
-    JSON file.
-    :param raw_file: Directory containing raw CSV file
-    :param json_output: Path where JSON files should be output into
+    creates a Spark DataFrame with the defined schema,
+    and writes the output as a single JSON file.
+    The JSON file is saved in the LOGSTASH_PATH volume.
+
+    Args:
+        raw_file (str): Directory containing full file path of raw CSV file.
+        json_output (str): Path where JSON files should be output into.
     """
     spark = SparkSession.builder.appName("Standalone GKG ETL").getOrCreate()
-
-    # Read the raw file as an RDD of lines.
-    rdd = spark.sparkContext.textFile(raw_file)
-    
-    # Apply the transformation using gkg_parser (which splits each line into 27 fields).
+    rdd = spark.sparkContext.textFile(raw_file)    
     parsed_rdd = rdd.map(lambda line: gkg_parser(line))
-    
-    # Convert the transformed RDD to a DataFrame using the defined gkg_schema.
     df = spark.createDataFrame(parsed_rdd, schema=gkg_schema)
 
     # Concatenate GkgRecordId.Date and GkgRecordId.NumberInBatch with "-"
@@ -117,126 +172,35 @@ def run_pipeline(raw_file, json_output):
         concat_ws("-", col("GkgRecordId.Date").cast("string"), col("GkgRecordId.NumberInBatch").cast("string"))
     )
 
-    df_transformed = df_transformed.drop("V1Counts") 
-    df_transformed = df_transformed.drop("V1Locations")
-    df_transformed = df_transformed.drop("V1Orgs")
-    df_transformed = df_transformed.drop("V1Persons")
-    df_transformed = df_transformed.drop("V1Themes")
-    df_transformed = df_transformed.drop("V21Amounts")
-    df_transformed = df_transformed.drop("V21Counts")
-    df_transformed = df_transformed.drop("V21EnhancedDates")
+    # Drops redundant data from dataframe.
+    to_drop = ["V1Counts", "V1Locations", "V1Orgs", "V1Persons", "V1Themes", "V21Amounts", "V21Counts", "V21EnhancedDates"]
+    for i in to_drop: df_transformed = df_transformed.drop(i)
 
-
-    df_transformed = df_transformed.withColumn(
-        "V15Tone",
-        struct(
-            col("V15Tone.Tone"),
-            col("V15Tone.PositiveScore"),
-            col("V15Tone.NegativeScore"),
-            col("V15Tone.Polarity"),
-            col("V15Tone.ActivityRefDensity"),
-            col("V15Tone.SelfGroupRefDensity")  # Removed 'WordCount'
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V21Quotations",
-        struct(
-            col("V21Quotations.Verb"),
-            col("V21Quotations.Quote")  # Removed 'WordCount'
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2Persons",
-        struct(
-            col("V2Persons.V1Person") # Removed 'WordCount'
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2Orgs",
-        struct(
-            col("V2Orgs.V1Org")  # Removed 'WordCount'
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2Locations",
-        struct(
-            col("V2Locations.FullName"),
-            col("V2Locations.CountryCode"),
-            col("V2Locations.ADM1Code"),
-            col("V2Locations.ADM2Code"),
-            col("V2Locations.LocationLatitude"),
-            col("V2Locations.LocationLongitude"),
-            col("V2Locations.FeatureId")  # Removed 'WordCount'
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2EnhancedThemes",
-        struct(
-            col("V2EnhancedThemes.V2Theme")  # Removed 'WordCount'
-        )
-    )
+    # Restructuring desired columns
+    V15Tone_fields = ['Tone', 'PositiveScore', "NegativeScore", 'Polarity', "ActivityRefDensity", "SelfGroupRefDensity"]
+    df_transformed = restructure_columns(df_transformed, "V15Tone", V15Tone_fields)
+    V21Quotations_fields = ["Verb", "Quote"]
+    df_transformed = restructure_columns(df_transformed, "V21Quotations", V21Quotations_fields)
+    V2Persons_fields = ["V1Person"]
+    df_transformed = restructure_columns(df_transformed, "V2Persons", V2Persons_fields)
+    V2Orgs_fields = ["V1Org"]
+    df_transformed = restructure_columns(df_transformed, "V2Orgs", V2Orgs_fields)
+    V2Locations_fields = ["FullName", "CountryCode", "ADM1Code", "ADM2Code", "LocationLatitude", "LocationLongitude", "FeatureId"]
+    df_transformed = restructure_columns(df_transformed, "V2Locations", V2Locations_fields)
+    V2EnhancedThemes_fields = ["V2Theme"]
+    df_transformed = restructure_columns(df_transformed, "V2EnhancedThemes", V2EnhancedThemes_fields)
     
+    V2GCAM_fields = ["DictionaryDimId"]
+    V21AllNames_fields = ["Name"]
+
     # Remove duplicates
-    df_transformed = df_transformed.withColumn(
-        "V2Locations",
-        struct(
-            array_distinct(col("V2Locations.FullName")).alias("FullName"),
-            array_distinct(col("V2Locations.CountryCode")).alias("CountryCode"),
-            array_distinct(col("V2Locations.ADM1Code")).alias("ADM1Code"),
-            array_distinct(col("V2Locations.ADM2Code")).alias("ADM2Code"),
-            array_distinct(col("V2Locations.LocationLatitude")).alias("LocationLatitude"),
-            array_distinct(col("V2Locations.LocationLongitude")).alias("LocationLongitude"),
-            array_distinct(col("V2Locations.FeatureId")).alias("FeatureId")
-        )
-    )
-    df_transformed = df_transformed.withColumn(
-        "V2Persons",
-        struct(
-            array_distinct(col("V2Persons.V1Person")).alias("V1Person"),
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2EnhancedThemes",
-        struct(
-            array_distinct(col("V2EnhancedThemes.V2Theme")).alias("V2Theme"),
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2Orgs",
-        struct(
-            array_distinct(col("V2Orgs.V1Org")).alias("V1Org"),
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2GCAM",
-        struct(
-            array_distinct(col("V2GCAM.DictionaryDimId")).alias("DictionaryDimId"),
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V21Quotations",
-        struct(
-            array_distinct(col("V21Quotations.Verb")).alias("Verb"),
-            array_distinct(col("V21Quotations.Quote")).alias("Quote"),
-        )
-    )
-
-
-    df_transformed = df_transformed.withColumn(
-        "V21AllNames",
-        struct(
-            array_distinct(col("V21AllNames.Name")).alias("Name"),
-        )
-    )
+    df_transformed = restructure_array_struct_column(df_transformed, "V2Locations", V2Locations_fields)
+    df_transformed = restructure_array_struct_column(df_transformed, "V2Persons", V2Persons_fields)
+    df_transformed = restructure_array_struct_column(df_transformed, "V2EnhancedThemes", V2EnhancedThemes_fields)
+    df_transformed = restructure_array_struct_column(df_transformed, "V2Orgs", V2Orgs_fields)
+    df_transformed = restructure_array_struct_column(df_transformed, "V2GCAM", V2GCAM_fields)
+    df_transformed = restructure_array_struct_column(df_transformed, "V21Quotations", V21Quotations_fields)
+    df_transformed = restructure_array_struct_column(df_transformed, "V21AllNames", V21AllNames_fields)
     
     # Changing column names
     column_names = ["V21ShareImg", "V21SocImage", "V2DocId", "V21RelImg", "V21Date"]
@@ -250,48 +214,49 @@ def run_pipeline(raw_file, json_output):
     # Locates a JSON output file
     json_part_file = glob.glob(os.path.join(json_output, "part-00000-*.json"))[0]
 
-    # Constructing new JSON file name
+    # JSON file creation
     date_part = str((raw_file.split('/')[2].split('.'))[0])
     new_file_name = f"{date_part}.json"
-
-    # Moves JSON file, and copies renamed file for ingestion
     shutil.move(json_part_file, os.path.join(json_output, new_file_name))
     move_json_to_ingest(os.path.join(json_output, new_file_name))
 
     spark.stop()
 
-def move_json_to_ingest(file_path):
+def move_json_to_ingest(file_path: str) -> None:
     '''
     Moves the JSON file over to the json subfolder in logstash_ingest_data.
-    :param file_path: File path of target file to be shifted.
-    '''
-    os.makedirs(LOGSTASH_PATH, exist_ok=True)
     
-    # Only copy the .json file
-    if os.path.isfile(file_path) and file_path.endswith(".json"):
-        # Get the filename from the full path and copy to the target directory
-        target_path = os.path.join(LOGSTASH_PATH, os.path.basename(file_path))
-        shutil.move(file_path, target_path)
-        write_all(f"Copied {file_path} to {target_path}", [LOG_FILE, JSON_LOG_FILE])
-    else:
-        write_all(f"Invalid file: {file_path} (Not a JSON file or file doesn't exist)", [LOG_FILE, JSON_LOG_FILE])
+    Args:
+        file_path (str): File path to write the JSON file into.
+    '''
+    target_path = os.path.join(LOGSTASH_PATH, os.path.basename(file_path))
+    shutil.move(file_path, target_path)
+    write_all(f"Copied {file_path} to {target_path}", [LOG_FILE, JSON_LOG_FILE])
 
-def es_client_setup():
+def es_client_setup() -> Elasticsearch:
     '''
     Sets up client to connect to Elasticsearch.
+
+    Returns:
+        Elasticsearch client instance connected to the server.
     '''
-    es_client = Elasticsearch(
+    return Elasticsearch(
         "https://es01:9200",
         basic_auth=("elastic", "changeme"),
-        verify_certs=True, # Set to True if using trusted certs
+        verify_certs=True,
         ca_certs="./certs/ca/ca.crt",
         request_timeout=30
     )
-    return es_client
 
-def es_check_data(timestamp_str):
+def es_check_data(timestamp_str: str) -> bool:
     '''
     Queries Elasticsearch to check if data for given timestamp exists.
+
+    Args:
+        timestamp_str (str): String containing the timestamp of the file.
+
+    Returns:
+        bool: True if a file with such a timestamp exists in Elasticsearch, and False otherwise.
     '''
     client = es_client_setup()
     query_body = {"query": {"term": {"GkgRecordId.Date": timestamp_str}}}
@@ -299,16 +264,15 @@ def es_check_data(timestamp_str):
     return response.get('count', 0) > 0
 
 ################################################# Threading functions #################################################
-def process_downloaded_files():
+def process_downloaded_files() -> None:
     '''
-    Process downloaded CSV files, converting them into JSON format,
-    and delete the processed CSV file.
+    Infinite looping function that process downloaded CSV files via PySpark dataframe,
+    converts them into JSON format, and finally deletes the relevant files / folders.
     '''
     # Source directory for CSV files
     src_path = "./csv"
     
     while True:
-        # List only the filenames in the CSV folder
         files = os.listdir(src_path)
         for file in files:
             if file.endswith(".csv"):
@@ -348,7 +312,7 @@ def process_downloaded_files():
                 try:
                     run_pipeline(raw_file_path, json_output_path)
                     
-                except FileNotFoundError as e:
+                except:
                     write_all(f"File not present in folder, skipping transformation: {file}", [LOG_FILE, JSON_LOG_FILE])
                 
                 # Remove the CSV file using its full path
