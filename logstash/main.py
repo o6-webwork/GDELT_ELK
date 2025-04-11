@@ -14,7 +14,6 @@ import glob
 import shutil
 import datetime, pytz
 from elasticsearch import Elasticsearch
-import time
 
 # Constants
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
@@ -355,7 +354,7 @@ def process_downloaded_files():
                 # Remove the CSV file using its full path
                 write_all(f"Transformed file into JSON: {file}")
                 with open(PYSPARK_LOG_FILE, "w") as f: f.write("")
-                time.sleep(1)
+                sleep(1)
                 if os.path.exists(raw_file_path):
                     os.remove(raw_file_path)
                 write_all(f"Deleted processed CSV file: {raw_file_path}", [LOG_FILE, JSON_LOG_FILE])
