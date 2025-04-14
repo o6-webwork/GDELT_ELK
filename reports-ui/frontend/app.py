@@ -14,8 +14,8 @@ with col[0]:
     st.markdown("#### 🚦 Top Trend Metrics")
     st.markdown("##### 🔍 Filters")
 
-    start_date = st.date_input("Start Date", pd.to_datetime("2025-03-25"))
-    end_date = st.date_input("End Date", pd.to_datetime("2025-04-09"))
+    start_date = st.date_input("Start Date", pd.to_datetime("2025-04-13"))
+    end_date = st.date_input("End Date", pd.to_datetime("2025-04-14"))
     
     fields_response = requests.get(f"{BACKEND_URL}/fields")
     
