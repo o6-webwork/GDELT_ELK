@@ -44,12 +44,12 @@ archive_thread = None
 archive_cancel_event = threading.Event()
 
 # Global progress trackers for tasks
-patching_progress = {"percent": 0, "message": ""}
-archive_progress = {"percent": 0, "message": ""}
+patching_progress: dict[str, int | str] = {"percent": 0, "message": ""}
+archive_progress: dict[str, int | str] = {"percent": 0, "message": ""}
 
 # Global lists to track downloaded/created files during tasks
-patching_downloaded_files = []
-archive_downloaded_files = []
+patching_downloaded_files: List[str] = []
+archive_downloaded_files: List[str] = []
 
 ############################ Helper Functions ############################
 def write(content: str) -> None:
@@ -402,7 +402,6 @@ async def displaying_ingestion_logs() -> dict:
     ingestion_logs = displaying_logs(JSON_LOG_FILE, 12)
     return {"lines": ingestion_logs}
 
-
 @app.get("/status")
 async def status() -> dict:
     '''
@@ -421,9 +420,13 @@ async def status() -> dict:
         "load": ingestion_status
     }
 
-
 @app.get("/file_counts")
-async def file_counts():
+async def file_counts() -> dict:
+    '''
+    Gets the number of CSV and JSON files in the respective volumes.
+    Returns:
+        dict (dict): CSV and JSON file count.
+    '''
     try:
         csv_files = os.listdir(DOWNLOAD_FOLDER)
         json_files = os.listdir(LOGSTASH_FOLDER)
@@ -433,9 +436,15 @@ async def file_counts():
     json_count = sum(1 for f in json_files if f.lower().endswith(".json"))
     return {"csv_count": csv_count, "json_count": json_count}
 
-
 @app.post("/patching")
-async def patch_missing(look_back_days: int = Form(3)):
+async def patch_missing(look_back_days: int = Form(3)) -> dict:
+    '''
+    Starts the patching task, and returns a message informing users of progress.
+    Args:
+        look_back_days (int): Number of look back days from current date to start the patching process from.
+    Returns:
+        dict: Sets the status, message and number of look back days on the dashboard page.
+    '''
     global patching_thread, patching_cancel_event, patching_progress
     patching_cancel_event.clear()  # Reset previous cancellation
     patching_progress = {"percent": 0, "message": "Task started..."}
@@ -443,16 +452,24 @@ async def patch_missing(look_back_days: int = Form(3)):
     patching_thread.start()
     return {"status": "running", "message": "Patching started", "look_back_days": look_back_days}
 
-
 @app.post("/patch_cancel")
-async def patch_cancel():
+async def patch_cancel() -> dict:
+    '''
+    Cancels the file patching request.
+    Returns:
+        dict: Message that patching request has been cancelled.
+    '''
     global patching_cancel_event
     patching_cancel_event.set()
     return {"message": "Patching cancellation initiated."}
 
-
 @app.post("/patch_stop_delete")
-async def patch_stop_and_delete():
+async def patch_stop_and_delete() -> dict:
+    '''
+    Cancels the patching request, and delete all recently downloaded files from the system.
+    Returns:
+        dict: Message that patching and deletion processes have been initiated.
+    '''
     global patching_cancel_event, patching_downloaded_files, patching_progress
     patching_cancel_event.set()
     deleted_files = []
@@ -473,9 +490,16 @@ async def patch_stop_and_delete():
         patching_progress["message"] = "Patching cancelled, but an error occurred during file deletion."
         return JSONResponse(content={"message": f"Patching cancelled, but an error occurred during file deletion: {e}"}, status_code=500)
 
-
 @app.post("/archive")
-async def archive_download(start_date: str = Form(...), end_date: str = Form(...)):
+async def archive_download(start_date: str = Form(...), end_date: str = Form(...)) -> dict:
+    '''
+    Starts the process for downloading files within the specified date range.
+    Args:
+        start_date (str): Date to start downloading files from.
+        end_date (str): Date to stop downloading files.
+    Returns:
+        dict: Message stating that download process has been started.
+    '''
     try:
         datetime.datetime.strptime(start_date, "%Y-%m-%d")
         datetime.datetime.strptime(end_date, "%Y-%m-%d")
@@ -488,16 +512,25 @@ async def archive_download(start_date: str = Form(...), end_date: str = Form(...
     archive_thread.start()
     return {"message": "Archive download started", "start_date": start_date, "end_date": end_date}
 
-
 @app.post("/archive_cancel")
-async def archive_cancel():
+async def archive_cancel() -> dict:
+    '''
+    Cancels the archival ingestion process.
+    Returns:
+        dict: Message stating that download cancellation has been initiated.
+    '''
     global archive_cancel_event
     archive_cancel_event.set()
     return {"message": "Archive download cancellation initiated."}
 
-
 @app.post("/archive_stop_delete")
-async def archive_stop_and_delete():
+async def archive_stop_and_delete() -> dict | JSONResponse:
+    '''
+    Cencels archive process, and deletes all related files.
+    Returns:
+        dict|JSONResponse: Message either informing users of process success,
+                           or of errors encountered during file deletion process.
+    '''
     global archive_cancel_event, archive_downloaded_files, archive_progress
     archive_cancel_event.set()
     deleted_files = []
@@ -518,44 +551,19 @@ async def archive_stop_and_delete():
         archive_progress["message"] = "Archive cancelled, but an error occurred during file deletion."
         return JSONResponse(content={"message": f"Archive cancelled, but an error occurred during file deletion: {e}"}, status_code=500)
 
-
-@app.post("/get_archive_files")
-async def get_archive_files(start_date: str = Form(...), end_date: str = Form(...)):
-    try:
-        datetime.datetime.strptime(start_date, "%Y-%m-%d")
-        datetime.datetime.strptime(end_date, "%Y-%m-%d")
-    except Exception as e:
-        return {"files": [], "error": "Invalid date format."}
-    try:
-        all_files = os.listdir(DOWNLOAD_FOLDER)
-    except Exception as e:
-        return {"files": [], "error": str(e)}
-    
-    available_files = []
-    start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
-    end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d")
-    end_dt = end_dt + datetime.timedelta(days=1) - datetime.timedelta(microseconds=1)
-    
-    for f in all_files:
-        try:
-            file_date = datetime.datetime.strptime(f[:8], "%Y%m%d")
-            if start_dt <= file_date <= end_dt:
-                available_files.append(f)
-        except Exception:
-            continue
-    
-    return {"files": available_files}
-
-
 @app.get("/patch_progress")
-async def patch_progress_endpoint():
+async def patch_progress_endpoint() -> dict[str: int | str]:
+    '''
+    Gets the current patching progress.
+    '''
     return patching_progress
 
-
 @app.get("/archive_progress")
-async def archive_progress_endpoint():
+async def archive_progress_endpoint() -> dict[str: int | str]:
+    '''
+    Gets the current archival progress.
+    '''
     return archive_progress
-
 
 ############################ Main ############################
 
