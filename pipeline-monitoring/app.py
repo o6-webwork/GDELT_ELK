@@ -354,78 +354,78 @@ async def set_color() -> RedirectResponse:
     return RedirectResponse("/")
 
 @app.get("/remaining", response_model = None)
-async def remaining() -> dict | JSONResponse:
+async def remaining() -> JSONResponse:
     '''
     Gets the remaining time until the 15 min intermittent downloader for main.py runs again.
 
     Returns:
-        dict|JSONResponse: If the time is successfully obtained, returns a dictionary containing the remaining time.
+        JSONResponse: If the time is successfully obtained, returns a dictionary containing the remaining time.
                              Else, returns an erroneous JSON response.
     '''
     remaining_time = get_remaining_time()
     if remaining_time is None:
         return JSONResponse(content={"error": "Error reading log file"}, status_code=500)
-    return {"remaining": remaining_time}
+    return JSONResponse(content={"remaining": remaining_time})
 
 @app.get("/logs")
-async def get_logs() -> dict:
+async def get_logs() -> JSONResponse:
     '''
     Gets the log data to display on the dashboard in real-time.
 
     Returns:
-        dict: Log data fed into a dictionary to a variable name.
+        JSONResponse: Log data fed into a dictionary to a variable name.
     '''
     logs = displaying_logs(LOG_FILE, 500)
     logs = [line.rstrip() for line in logs]
-    return {"lines": logs}
+    return JSONResponse(content={"lines": logs})
 
 
 @app.get("/scraping_logs")
-async def displaying_scraping_logs() -> dict:
+async def displaying_scraping_logs() -> JSONResponse:
     '''
     Gets the log data to display on the dashboard in real-time.
 
     Returns:
-        dict: Log data fed into a dictionary to a variable name.
+        JSONResponse: Log data fed into a dictionary to a variable name.
     '''
     scraping_logs = displaying_logs(SCRAPING_LOG_FILE)
-    return {"lines": scraping_logs}
+    return JSONResponse(content={"lines": scraping_logs})
 
 @app.get("/ingestion_logs")
-async def displaying_ingestion_logs() -> dict:
+async def displaying_ingestion_logs() -> JSONResponse:
     '''
     Gets the log data to display on the dashboard in real-time.
 
     Returns:
-        dict: Log data fed into a dictionary to a variable name.
+        JSONResponse: Log data fed into a dictionary to a variable name.
     '''
     ingestion_logs = displaying_logs(JSON_LOG_FILE, 12)
-    return {"lines": ingestion_logs}
+    return JSONResponse(content={"lines": ingestion_logs})
 
 @app.get("/status")
-async def status() -> dict:
+async def status() -> JSONResponse:
     '''
     Constantly checks for any error messages in the log files.
     Updates the dashboard page accordingly.
 
     Returns:
-        dict: Statuses of the respective pipelines.
+        JSONResponse: Statuses of the respective pipelines.
     '''
     scraping_status = get_pipeline_status(SCRAPING_LOG_FILE)
     transform_status = get_pipeline_status(JSON_LOG_FILE)
     ingestion_status = get_pipeline_status(INGESTION_LOG_FILE)
-    return {
+    return JSONResponse(content={
         "extract": scraping_status,
         "transform": transform_status,
         "load": ingestion_status
-    }
+    })
 
 @app.get("/file_counts")
-async def file_counts() -> dict:
+async def file_counts() -> JSONResponse:
     '''
     Gets the number of CSV and JSON files in the respective volumes.
     Returns:
-        dict (dict): CSV and JSON file count.
+        JSONResponse: CSV and JSON file count.
     '''
     try:
         csv_files = os.listdir(DOWNLOAD_FOLDER)
@@ -434,41 +434,41 @@ async def file_counts() -> dict:
         return JSONResponse(content={"error": str(e)}, status_code=500)
     csv_count = sum(1 for f in csv_files if f.lower().endswith(".csv"))
     json_count = sum(1 for f in json_files if f.lower().endswith(".json"))
-    return {"csv_count": csv_count, "json_count": json_count}
+    return JSONResponse(content={"csv_count": csv_count, "json_count": json_count})
 
 @app.post("/patching")
-async def patch_missing(look_back_days: int = Form(3)) -> dict:
+async def patch_missing(look_back_days: int = Form(3)) -> JSONResponse:
     '''
     Starts the patching task, and returns a message informing users of progress.
     Args:
         look_back_days (int): Number of look back days from current date to start the patching process from.
     Returns:
-        dict: Sets the status, message and number of look back days on the dashboard page.
+        JSONResponse: Sets the status, message and number of look back days on the dashboard page.
     '''
     global patching_thread, patching_cancel_event, patching_progress
     patching_cancel_event.clear()  # Reset previous cancellation
     patching_progress = {"percent": 0, "message": "Task started..."}
     patching_thread = threading.Thread(target=patching_task, args=(look_back_days,))
     patching_thread.start()
-    return {"status": "running", "message": "Patching started", "look_back_days": look_back_days}
+    return JSONResponse(content={"status": "running", "message": "Patching started", "look_back_days": look_back_days})
 
 @app.post("/patch_cancel")
-async def patch_cancel() -> dict:
+async def patch_cancel() -> JSONResponse:
     '''
     Cancels the file patching request.
     Returns:
-        dict: Message that patching request has been cancelled.
+        JSONResponse: Message that patching request has been cancelled.
     '''
     global patching_cancel_event
     patching_cancel_event.set()
-    return {"message": "Patching cancellation initiated."}
+    return JSONResponse(content={"message": "Patching cancellation initiated."})
 
 @app.post("/patch_stop_delete", response_model = None)
-async def patch_stop_and_delete() -> dict | JSONResponse:
+async def patch_stop_and_delete() -> JSONResponse:
     '''
     Cancels the patching request, and delete all recently downloaded files from the system.
     Returns:
-        dict: Message that patching and deletion processes have been initiated.
+        JSONResponse: Message that patching and deletion processes have been initiated.
     '''
     global patching_cancel_event, patching_downloaded_files, patching_progress
     patching_cancel_event.set()
@@ -484,36 +484,41 @@ async def patch_stop_and_delete() -> dict | JSONResponse:
         patching_downloaded_files = []
         patching_progress["message"] = "Patching task cancelled and downloaded files deleted."
         write("Patching task cancelled and downloaded files deleted by user request.")
-        return {"message": f"Patching cancelled. Deleted files: {', '.join(deleted_files)}"}
+        return JSONResponse(content={"message": f"Patching cancelled. Deleted files: {', '.join(deleted_files)}"})
     except Exception as e:
         write(f"Error during deletion of patch files: {e}")
         patching_progress["message"] = "Patching cancelled, but an error occurred during file deletion."
         return JSONResponse(content={"message": f"Patching cancelled, but an error occurred during file deletion: {e}"}, status_code=500)
 
 @app.post("/archive")
-async def archive_download(start_date: str = Form(...), end_date: str = Form(...)) -> dict:
+async def archive_download(start_date: str = Form(...), end_date: str = Form(...)) -> JSONResponse:
     '''
     Starts the process for downloading files within the specified date range.
     Args:
         start_date (str): Date to start downloading files from.
         end_date (str): Date to stop downloading files.
     Returns:
-        dict: Message stating that download process has been started.
+        JSONResponse: Message stating that download process has been started.
     '''
     try:
         datetime.datetime.strptime(start_date, "%Y-%m-%d")
         datetime.datetime.strptime(end_date, "%Y-%m-%d")
     except Exception as e:
-        return JSONResponse(content={"error": "Invalid date format."})
+        return JSONResponse(content={"error": "Invalid date format."}, status_code=400)
     global archive_thread, archive_cancel_event, archive_progress
     archive_cancel_event.clear()
     archive_progress = {"percent": 0, "message": "Task started..."}
     archive_thread = threading.Thread(target=patching_task_range, args=(start_date, end_date))
     archive_thread.start()
-    return {"message": "Archive download started", "start_date": start_date, "end_date": end_date}
+    return JSONResponse(
+        content={
+            "message": "Archive download started", "start_date": start_date, "end_date": end_date
+            },
+            status_code=202 # Accepted
+            )
 
 @app.post("/archive_cancel")
-async def archive_cancel() -> dict:
+async def archive_cancel() -> dict[str, str]:
     '''
     Cancels the archival ingestion process.
     Returns:
@@ -524,11 +529,11 @@ async def archive_cancel() -> dict:
     return {"message": "Archive download cancellation initiated."}
 
 @app.post("/archive_stop_delete", response_model = None)
-async def archive_stop_and_delete() -> dict | JSONResponse:
+async def archive_stop_and_delete() -> JSONResponse:
     '''
     Cencels archive process, and deletes all related files.
     Returns:
-        dict|JSONResponse: Message either informing users of process success,
+        JSONResponse: Message either informing users of process success,
                            or of errors encountered during file deletion process.
     '''
     global archive_cancel_event, archive_downloaded_files, archive_progress
@@ -545,21 +550,21 @@ async def archive_stop_and_delete() -> dict | JSONResponse:
         archive_downloaded_files = []
         archive_progress["message"] = "Archive task cancelled and downloaded files deleted."
         write("Archive task cancelled and downloaded files deleted by user request.")
-        return {"message": f"Archive cancelled. Deleted files: {', '.join(deleted_files)}"}
+        return JSONResponse(content={"message": f"Archive cancelled. Deleted files: {', '.join(deleted_files)}"}, status_code=200)
     except Exception as e:
         write(f"Error during deletion of archive files: {e}")
         archive_progress["message"] = "Archive cancelled, but an error occurred during file deletion."
         return JSONResponse(content={"message": f"Archive cancelled, but an error occurred during file deletion: {e}"}, status_code=500)
 
 @app.get("/patch_progress", response_model = None)
-async def patch_progress_endpoint() -> dict[str: int | str]:
+async def patch_progress_endpoint() -> dict[str, int | str]:
     '''
     Gets the current patching progress.
     '''
     return patching_progress
 
 @app.get("/archive_progress", response_model = None)
-async def archive_progress_endpoint() -> dict[str: int | str]:
+async def archive_progress_endpoint() -> dict[str, int | str]:
     '''
     Gets the current archival progress.
     '''
