@@ -205,6 +205,9 @@ services:
     build: ./reports-ui/backend
     ports:
       - "8000:8000"
+    depends_on:
+      es01:
+        condition: service_healthy
     networks:
       - elastic
 
