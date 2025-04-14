@@ -353,7 +353,7 @@ async def set_color() -> RedirectResponse:
     current_viewing_mode, alt_viewing_mode = alt_viewing_mode, current_viewing_mode
     return RedirectResponse("/")
 
-@app.get("/remaining")
+@app.get("/remaining", response_model = None)
 async def remaining() -> dict | JSONResponse:
     '''
     Gets the remaining time until the 15 min intermittent downloader for main.py runs again.
@@ -463,8 +463,8 @@ async def patch_cancel() -> dict:
     patching_cancel_event.set()
     return {"message": "Patching cancellation initiated."}
 
-@app.post("/patch_stop_delete")
-async def patch_stop_and_delete() -> dict:
+@app.post("/patch_stop_delete", response_model = None)
+async def patch_stop_and_delete() -> dict | JSONResponse:
     '''
     Cancels the patching request, and delete all recently downloaded files from the system.
     Returns:
@@ -523,7 +523,7 @@ async def archive_cancel() -> dict:
     archive_cancel_event.set()
     return {"message": "Archive download cancellation initiated."}
 
-@app.post("/archive_stop_delete")
+@app.post("/archive_stop_delete", response_model = None)
 async def archive_stop_and_delete() -> dict | JSONResponse:
     '''
     Cencels archive process, and deletes all related files.
@@ -551,14 +551,14 @@ async def archive_stop_and_delete() -> dict | JSONResponse:
         archive_progress["message"] = "Archive cancelled, but an error occurred during file deletion."
         return JSONResponse(content={"message": f"Archive cancelled, but an error occurred during file deletion: {e}"}, status_code=500)
 
-@app.get("/patch_progress")
+@app.get("/patch_progress", response_model = None)
 async def patch_progress_endpoint() -> dict[str: int | str]:
     '''
     Gets the current patching progress.
     '''
     return patching_progress
 
-@app.get("/archive_progress")
+@app.get("/archive_progress", response_model = None)
 async def archive_progress_endpoint() -> dict[str: int | str]:
     '''
     Gets the current archival progress.
