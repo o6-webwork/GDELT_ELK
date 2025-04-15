@@ -16,7 +16,13 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install the Python packages from requirements.txt
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN pip install --upgrade pip  
+
+RUN pip install --upgrade setuptools wheel
+
+RUN pip install python-multipart
+
+RUN pip install -r requirements.txt
 
 COPY . .
 
