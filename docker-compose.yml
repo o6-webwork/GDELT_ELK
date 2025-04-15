@@ -207,6 +207,8 @@ services:
       - certs:/app/certs
     ports:
       - ${PIPELINE_MONITORING_PORT}:7979
+    networks:
+      - elastic
 
   reportsui_backend:
     build: ./reports-ui/backend
