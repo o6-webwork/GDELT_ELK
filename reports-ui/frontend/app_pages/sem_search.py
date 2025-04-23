@@ -1,6 +1,8 @@
 import streamlit as st
 
 st.set_page_config(page_title="GDELT Search", layout="wide")
+BACKEND_URL = "http://reportsui_backend:8000" 
+
 
 st.title("🌍 GDELT GKG Search Interface")
 
@@ -13,7 +15,7 @@ if st.button("Search"):
         st.warning("Please enter a query to search.")
     else:
         st.success(f"Query submitted: `{query}`")
-        st.write("🔍 (This is where your query would trigger Elasticsearch or Spark.)")
+        
         # You could call a backend function like:
         # results = search_gdelt(query, filter_by)
         # st.write(results)
