@@ -7,3 +7,6 @@ logstash/logs
 .env
 */__pycache__
 /.vscode
+
+venv/
+.venv
