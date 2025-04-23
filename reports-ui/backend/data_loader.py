@@ -1,6 +1,7 @@
 from elasticsearch import Elasticsearch
 from datetime import date, timedelta, datetime
 import pandas as pd
+import json
 
 # --- CONFIG ---
 ES_HOST = "https://es01:9200"
@@ -97,3 +98,7 @@ def load_data_from_elasticsearch(start_date: str, end_date: str, entity_field: s
 
     df = pd.DataFrame(data)
     return df
+
+#############################################################################################################################################
+def load_json_from_elasticsearch(query: str, ) -> dict:
+    return es.search(index=ES_INDEX, body=query)
