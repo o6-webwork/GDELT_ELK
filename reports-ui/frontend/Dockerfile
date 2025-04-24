@@ -13,9 +13,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY app.py requirements.txt /app/
+# Copy all relevant files
+COPY streamlitapp.py requirements.txt /app/
 
+# Install Python dependencies
 RUN pip install --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.enableCORS=false"]
+# Run the new Streamlit entry file
+CMD ["streamlit", "run", "streamlitapp.py", "--server.port=8501", "--server.enableCORS=false"]

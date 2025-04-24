@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="📈 Entity Trends Dashboard", layout="wide", initial_sidebar_state="expanded")
-BACKEND_URL = "http://reportsui_backend:8000" 
+BACKEND_URL = "http://reportsui_backend:8000/reports_backend" 
 st.markdown("### 📊 Entity Mentions Trend and Time Series Dashboard")
 
 col = st.columns((2, 4.5, 4.5), gap="small")
