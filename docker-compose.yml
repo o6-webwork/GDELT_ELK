@@ -210,20 +210,48 @@ services:
     networks:
       - elastic
 
-  reportsui_backend:
+  # reportsui_backend:
+  #   build: ./reports-ui/backend
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on:
+  #     es01:
+  #       condition: service_healthy
+  #   networks:
+  #     - elastic
+
+  # reportsui_frontend:
+  #   build: ./reports-ui/frontend
+  #   ports:
+  #     - "8501:8501"
+    # networks:
+    #   - elastic
+
+####
+  backend:
     build: ./reports-ui/backend
     ports:
       - "8000:8000"
     depends_on:
-      es01:
-        condition: service_healthy
+    es01:
+      condition: service_healthy
     networks:
       - elastic
+    volumes:
+      - ./reports-ui/backend:/app
+    working_dir: /app
+    # command: uvicorn main:app --host 0.0.0.0 --port 8000
 
-  reportsui_frontend:
+  frontend:
     build: ./reports-ui/frontend
     ports:
       - "8501:8501"
     networks:
       - elastic
+    depends_on:
+      - backend
+    volumes:
+      - ./reports-ui/frontend:/app
+    working_dir: /app
+    # command: streamlit run streamlitapp.py --server.port=8501 --server.enableCORS=false
 

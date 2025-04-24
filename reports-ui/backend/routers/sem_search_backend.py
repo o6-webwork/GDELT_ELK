@@ -1,27 +1,17 @@
-from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, Query
 from sentence_transformers import SentenceTransformer, util
 import numpy as np
 import json, faiss
 
-from data_loader import load_data_from_elasticsearch
+from routers.data_loader import load_data_from_elasticsearch
 
-ES_INDEX = "gkg"
+router = APIRouter()
 
-app = FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.get("/response")
+@router.get("/response")
 def get_response(es_query: str):
     return load_data_from_elasticsearch(es_query)
 
-@app.get("/vector_store")
+@router.get("/vector_store")
 def vect_store(user_query: str, no_results: int):
     # Step 1: Load tags
     with open("gdelt_lookup.txt", "r") as f:

@@ -4,3 +4,5 @@ pandas==2.2.2
 pymannkendall==1.4.3
 elasticsearch==8.17.2
 sentence-transformers==4.1.0 
+faiss-cpu==1.10.0
+numpy==2.2.4

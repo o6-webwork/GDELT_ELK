@@ -1,26 +1,13 @@
-from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, Query
 import os, requests
-from elasticsearch import Elasticsearch
 
-from data_loader import load_data_from_elasticsearch
-
-ES_INDEX = "gkg"
-
-app = FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+router = APIRouter()
 
 LLM_URL = "http://192.168.1.111:80/vllm_qwen2.5/v1/chat/completions"
 
 TOKEN = "token-abc123"
 
-app.get("/query_gen")
+@router.get("/query_gen")
 def generate_query(user_prompt: str):
     system_prompt = """
         You are an expert at translating plain English questions into queries for the GDELT Global Knowledge Graph (GKG).

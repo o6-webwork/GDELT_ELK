@@ -3,10 +3,9 @@ import pandas as pd
 import pymannkendall as mk
 from datetime import datetime
 
-from data_loader import get_fields_from_elasticsearch, load_data_from_elasticsearch
+from routers.data_loader import get_fields_from_elasticsearch, load_data_from_elasticsearch
 
 ES_INDEX = "gkg"
-
 
 router = APIRouter()
 
