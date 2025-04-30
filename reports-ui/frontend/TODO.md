@@ -1,0 +1,1 @@
+- [ ] Optimise first query to ES by conducting filter during first query, after top tags has already been taken

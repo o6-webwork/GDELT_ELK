@@ -11,6 +11,8 @@ st.title("🌍 GDELT GKG Search Interface")
 user_prompt = st.text_input("Enter your GDELT-style query:", placeholder="e.g., Ukraine AND Conflict AND SourceCommonName:BBC")
 no_results = st.number_input("How many results do you want to retrieve?", min_value=1, max_value=1000, value=5)
 
+response_json = None
+
 # Search button
 if st.button("Search"):
     if user_prompt.strip() == "":
@@ -29,62 +31,32 @@ if st.button("Search"):
         st.stop()   
     vect_store_json = vect_store.json()
 
-    # {
-    # "Health": 0.8234,
-    # "Medicine": 0.8176,
-    # "Pharmaceutical": 0.8002
-    # }
-
-    es_query = {
-        "_source": [
-            "RecordId",
-            "V21Date",
-            "V2ExtrasXML.Title",
-            "V2DocId",
-            "V2EnhancedThemes.V2Theme"
-        ],
-        "query": {
-            "match_all": {}  # You can replace this with your desired query
-        }
-    }
-
     # Get ES response
     response = requests.post(
-        f"{BACKEND_URL}/sem_search_backend/response",
-        json=es_query,
-        # params={"es_query": es_query}
+        f"{BACKEND_URL}/sem_search_backend/sem_search",
+        json={
+            "user_prompt": user_prompt,
+            "top_tags": dict(vect_store_json)
+        }
     )
     if response.status_code != 200:
         st.warning(f"Unable to get response, status code: {response.status_code}")
         st.stop()
     response_json = response.json()
 
-    # Filter ES response
-    filtered_response = requests.post(
-        f"{BACKEND_URL}/sem_search_backend/filter",
-        json={
-            "data": response_json,
-            "top_tags": vect_store_json
-        }
-    )
-    if filtered_response.status_code != 200:
-        st.warning(f"Unable to get response, status code: {filtered_response.status_code}")
-        st.stop()
-    elif filtered_response == None:
-        st.warning("Query has returned zero results")
-        st.stop()
-    filtered_json = filtered_response.json()
 
-    # Perform one more semantic search
-    result = requests.get(
-        f"{BACKEND_URL}/sem_search_backend/sem_search",
-        params={"data": filtered_json,
-                "user_prompt": user_prompt
-                }
-    )
-    if result.status_code != 200:
-        st.warning(f"Unable to get response, status code: {result.status_code}")
-        st.stop()
-    result_json = result.json()
-
-    st.write(result_json)
+st.subheader("🔍 Search Results")
+if response_json:
+    for idx, article in enumerate(response_json):
+        with st.expander(f"{idx+1}. {article['title']} (Score: {article['score']})"):
+            st.markdown(f"**🧾 Record ID:** {article['RecordId']}")
+            st.markdown(f"**📅 Date:** {article['V21Date']}")
+            st.markdown(f"**🔗 Link:** [{article['V2DocId']}]({article['V2DocId']})")
+            
+            # Truncate long theme lists for brevity
+            themes = article['V2Theme']
+            theme_preview = ", ".join(themes[:10])
+            more_themes = f" and {len(themes) - 10} more..." if len(themes) > 10 else ""
+            st.markdown(f"**🏷 Themes:** {theme_preview}{more_themes}")
+else:
+    st.warning("No results found.")
