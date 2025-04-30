@@ -6,3 +6,5 @@ elasticsearch==8.17.2
 sentence-transformers==4.1.0 
 faiss-cpu==1.10.0
 numpy==2.2.4
+vllm==0.8.5
+scikit-learn==1.6.1

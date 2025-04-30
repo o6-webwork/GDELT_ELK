@@ -100,5 +100,5 @@ def load_data_from_elasticsearch(start_date: str, end_date: str, entity_field: s
     return df
 
 #############################################################################################################################################
-def load_json_from_elasticsearch(query: str, ) -> dict:
+def load_json_from_elasticsearch(query: dict, ) -> dict:
     return es.search(index=ES_INDEX, body=query)

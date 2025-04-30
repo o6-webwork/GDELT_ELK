@@ -228,13 +228,18 @@ services:
     #   - elastic
 
 ####
-  backend:
+  reportsui_backend:
     build: ./reports-ui/backend
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      retries: 5
+      start_period: 5s
     depends_on:
-    es01:
-      condition: service_healthy
+      es01:
+        condition: service_healthy
     networks:
       - elastic
     volumes:
@@ -242,14 +247,16 @@ services:
     working_dir: /app
     # command: uvicorn main:app --host 0.0.0.0 --port 8000
 
-  frontend:
+  reportsui_frontend:
     build: ./reports-ui/frontend
     ports:
       - "8501:8501"
+    # environment:
+    #   - BACKEND_URL=http://reportsui_backend:8000/reports_backend
     networks:
       - elastic
     depends_on:
-      - backend
+      - reportsui_backend
     volumes:
       - ./reports-ui/frontend:/app
     working_dir: /app

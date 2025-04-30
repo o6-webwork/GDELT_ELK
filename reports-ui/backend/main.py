@@ -14,7 +14,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+ 
 # Register routers
 app.include_router(reports_backend.router, prefix="/reports_backend")
 app.include_router(query_gen.router, prefix="/query_gen")

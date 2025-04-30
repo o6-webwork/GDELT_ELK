@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Query
 import os, requests
+from vllm import LLM, SamplingParams
 
 router = APIRouter()
-
-LLM_URL = "http://192.168.1.111:80/vllm_qwen2.5/v1/chat/completions"
-
+LLM_URL = "http://192.168.1.108:80/v1/chat/completions"
+# llm = LLM(model="/home/ubuntu/Desktop/vllm_qwen/models/qwen2.5-14b-coder-instruct", 
+#         #   gpu_memory_utilization=0.9
+#           ) 
 TOKEN = "token-abc123"
 
 @router.get("/query_gen")
@@ -158,7 +160,7 @@ def generate_query(user_prompt: str):
         ---
         Q: I want only the themes of the document
             "_source": [
-                "V2DocId"
+                "V2DocId" 
                 "V2ExtrasXML.Author"
                 "V2ExtrasXML.Title"
                 "V2ExtrasXML.PubTimestamp"
@@ -209,3 +211,9 @@ def generate_query(user_prompt: str):
     )
     
     return r.json()["choices"][0]["message"]["content"]
+
+    # prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>"
+    # sampling_params = SamplingParams(temperature=0)
+    # outputs = llm.generate([prompt], sampling_params)
+
+    # return outputs[0].outputs[0].text.strip()

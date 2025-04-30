@@ -17,30 +17,74 @@ if st.button("Search"):
         st.warning("Please enter a query to search.")
         st.stop()
 
-    st.success(f"Query submitted: `{user_prompt}`") 
-    es_query = requests.get(
-        f"{BACKEND_URL}/query_gen",
-        params={
-            "user_prompt": user_prompt,
-        }
+    # Get N relevant data
+    vect_store = requests.get(
+        f"{BACKEND_URL}/sem_search_backend/vector_store",
+        params={"user_query": user_prompt,
+                "no_results": no_results
+                }
     )
-    if es_query.status_code != 200:
-        st.warning(f"Unable to get query, status code: {es_query.status_code}")
+    if vect_store.status_code != 200:
+        st.warning(f"Unable to get query, status code: {vect_store.status_code}")
         st.stop()   
-    es_query_json = es_query.json()
+    vect_store_json = vect_store.json()
 
-    response = requests.get(
-        f"{BACKEND_URL}/response",
-        params={"es_query": es_query_json}
+    # {
+    # "Health": 0.8234,
+    # "Medicine": 0.8176,
+    # "Pharmaceutical": 0.8002
+    # }
+
+    es_query = {
+        "_source": [
+            "RecordId",
+            "V21Date",
+            "V2ExtrasXML.Title",
+            "V2DocId",
+            "V2EnhancedThemes.V2Theme"
+        ],
+        "query": {
+            "match_all": {}  # You can replace this with your desired query
+        }
+    }
+
+    # Get ES response
+    response = requests.post(
+        f"{BACKEND_URL}/sem_search_backend/response",
+        json=es_query,
+        # params={"es_query": es_query}
     )
     if response.status_code != 200:
         st.warning(f"Unable to get response, status code: {response.status_code}")
         st.stop()
     response_json = response.json()
-    
-    response = requests.get(
-        f"{BACKEND_URL}/vector_store",
-        params={"es_query": es_query_json}
-    )
 
-        
+    # Filter ES response
+    filtered_response = requests.post(
+        f"{BACKEND_URL}/sem_search_backend/filter",
+        json={
+            "data": response_json,
+            "top_tags": vect_store_json
+        }
+    )
+    if filtered_response.status_code != 200:
+        st.warning(f"Unable to get response, status code: {filtered_response.status_code}")
+        st.stop()
+    elif filtered_response == None:
+        st.warning("Query has returned zero results")
+        st.stop()
+    filtered_json = filtered_response.json()
+
+    # Perform one more semantic search
+    result = requests.get(
+        f"{BACKEND_URL}/sem_search_backend/sem_search",
+        params={"data": filtered_json,
+                "user_prompt": user_prompt
+                }
+    )
+    if result.status_code != 200:
+        st.warning(f"Unable to get response, status code: {result.status_code}")
+        st.stop()
+    result_json = result.json()
+
+    st.write(result_json)
