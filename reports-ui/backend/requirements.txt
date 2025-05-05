@@ -8,3 +8,4 @@ faiss-cpu==1.10.0
 numpy==2.2.4
 vllm==0.8.5
 scikit-learn==1.6.1
+mcp==1.6.0

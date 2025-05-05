@@ -1,0 +1,23 @@
+services:
+  mcp:
+    build: ./backend
+    # volumes:
+    #   - ./backend:/app  # Link the local backend folder to /app in the container
+    container_name: mcp_server
+    ports:
+      - "8000:8000"
+    networks:
+      - mcpnet
+
+  streamlit:
+    build: ./frontend
+    container_name: streamlit_app
+    ports:
+      - "8501:8501"
+    depends_on:
+      - mcp
+    networks:
+      - mcpnet
+
+networks:
+  mcpnet:

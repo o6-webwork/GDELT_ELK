@@ -1,1 +1,3 @@
 - [ ] Optimise first query to ES by conducting filter during first query, after top tags has already been taken
+- [ ] Clean streamlit project stucture to make it less messy
+- [ ] Switch from FastAPI to modelcontextprotocol

@@ -1,0 +1,2 @@
+elasticsearch==9.0.1
+mcp==1.7.1

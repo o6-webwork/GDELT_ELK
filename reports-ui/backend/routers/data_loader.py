@@ -13,7 +13,7 @@ DATE_FIELD = "V2ExtrasXML.PubTimestamp"
 MAX_ENTITIES = 1000
 
 # Creating Elasticsearch client :D
-es = Elasticsearch(
+es = Elasticsearch( 
     ES_HOST,
     basic_auth=(ES_USERNAME, ES_PASSWORD),
     verify_certs=False  # use True in production!
