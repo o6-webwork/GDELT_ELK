@@ -102,7 +102,8 @@ services:
       - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
       - xpack.security.transport.ssl.verification_mode=certificate
       - ES_JAVA_OPTS=-Xms3g -Xmx3g
-    mem_limit: ${ES_MEM_LIMIT}
+    # mem_limit: ${ES_MEM_LIMIT} # Change when memory is too small
+    mem_limit: 4g
     ulimits:
       memlock:
         soft: -1
@@ -226,39 +227,39 @@ services:
     #   - elastic
 
 # ##########################################################################################################
-  reportsui_backend:
-    build: ./reports-ui/backend
-    ports:
-      - "8000:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 5s
-      retries: 5
-      start_period: 5s
-    depends_on:
-      es01:
-        condition: service_healthy
-    networks:
-      - elastic
-    volumes:
-      - ./reports-ui/backend:/app
-    working_dir: /app
-    # command: uvicorn main:app --host 0.0.0.0 --port 8000
+  # reportsui_backend:
+  #   build: ./reports-ui/backend
+  #   ports:
+  #     - "8000:8000"
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+  #     interval: 5s
+  #     retries: 5
+  #     start_period: 5s
+  #   depends_on:
+  #     es01:
+  #       condition: service_healthy
+  #   networks:
+  #     - elastic
+  #   volumes:
+  #     - ./reports-ui/backend:/app
+  #   working_dir: /app
+  #   # command: uvicorn main:app --host 0.0.0.0 --port 8000
 
-  reportsui_frontend:
-    build: ./reports-ui/frontend
-    ports:
-      - "8501:8501"
-    # environment:
-    #   - BACKEND_URL=http://reportsui_backend:8000/reports_backend
-    networks:
-      - elastic
-    depends_on:
-      - reportsui_backend
-    volumes:
-      - ./reports-ui/frontend:/app
-    working_dir: /app
-    # command: streamlit run streamlitapp.py --server.port=8501 --server.enableCORS=false
+  # reportsui_frontend:
+  #   build: ./reports-ui/frontend
+  #   ports:
+  #     - "8501:8501"
+  #   # environment:
+  #   #   - BACKEND_URL=http://reportsui_backend:8000/reports_backend
+  #   networks:
+  #     - elastic
+  #   depends_on:
+  #     - reportsui_backend
+  #   volumes:
+  #     - ./reports-ui/frontend:/app
+  #   working_dir: /app
+  #   # command: streamlit run streamlitapp.py --server.port=8501 --server.enableCORS=false
 
   # mcp:
   #   build: ./mcp_demo/backend
