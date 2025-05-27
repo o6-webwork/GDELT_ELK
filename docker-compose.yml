@@ -1,25 +1,6 @@
-version: "3.8"
-
-volumes:
-  certs:
-    driver: local
-  esdata01:
-    driver: local
-  kibanadata:
-    driver: local
-  logstash01:
-    driver: local
-  logdata:
-    driver: local
-  csvfiles:
-    driver: local
-
-networks:
-  elastic:
-    driver: bridge
-
 services:
   setup:
+    container_name: setup
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     volumes:
       - certs:/usr/share/elasticsearch/config/certs
@@ -75,7 +56,9 @@ services:
       retries: 120
     networks:
       - elastic
+
   es01:
+    container_name: es01
     depends_on:
       setup:
         condition: service_healthy
@@ -122,6 +105,7 @@ services:
       - elastic
 
   kibana:
+    container_name: kibana
     depends_on:
       es01:
         condition: service_healthy
@@ -159,6 +143,7 @@ services:
     restart: always
 
   scraper:
+    container_name: scraper
     build: ./logstash
     volumes:
       - logstash01:/app/logstash_ingest_data/json
@@ -172,6 +157,7 @@ services:
       - elastic
 
   logstash01:
+    container_name: logstash01
     depends_on:
       es01:
         condition: service_healthy
@@ -196,6 +182,7 @@ services:
       - elastic
 
   pipeline-monitoring:
+    container_name: pipeline-monitoring
     depends_on:
       es01:
         condition: service_healthy
@@ -211,6 +198,7 @@ services:
       - elastic
 
   reportsui_backend:
+    container_name: reportsui_backend
     build: ./reports-ui/backend
     ports:
       - "8000:8000"
@@ -221,9 +209,27 @@ services:
       - elastic
 
   reportsui_frontend:
+    container_name: reportsui_frontend
     build: ./reports-ui/frontend
     ports:
       - "8501:8501"
     networks:
       - elastic
 
+volumes:
+  certs:
+    driver: local
+  esdata01:
+    driver: local
+  kibanadata:
+    driver: local
+  logstash01:
+    driver: local
+  logdata:
+    driver: local
+  csvfiles:
+    driver: local
+
+networks:
+  elastic:
+    driver: bridge
