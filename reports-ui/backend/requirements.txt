@@ -1,6 +1,6 @@
-fastapi==0.115.12
-uvicorn==0.34.2
-pandas==2.2.3
+fastapi==0.115.4
+uvicorn==0.32.0
+pandas==2.2.2
 pymannkendall==1.4.3
-elasticsearch==9.0.1
+elasticsearch==8.17.2
 sentence-transformers==4.1.0 
