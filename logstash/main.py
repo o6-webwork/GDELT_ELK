@@ -274,66 +274,71 @@ def process_downloaded_files() -> None:
     
     while True:
         files = os.listdir(src_path)
-        if files == []: continue
-        file = files[0]
-        if file.endswith(".csv"):
-            # Build the full path to the file
-            raw_file_path = os.path.join(src_path, file)
-            # Create the JSON output path by replacing .csv with .json
-            json_output_path = raw_file_path.replace(".csv", ".json")
-            
-            # Checks for presence of ingestion files
-            json_file_name = file.replace(".gkg.csv", ".json")
-            timestamp_str = json_file_name.split(".")[0]
-            if es_check_data(timestamp_str):
-                write_all(f"Transformation skipped: {json_file_name} already exists")
+        if files == []:
+            continue
+        for file in files:
+        #file = files[1]
+            if file.endswith(".csv"):
+                # Build the full path to the file
+                raw_file_path = os.path.join(src_path, file)
+                # Create the JSON output path by replacing .csv with .json
+                json_output_path = raw_file_path.replace(".csv", ".json")
 
-                # Removes the already processed file
-                os.remove(raw_file_path)
+                # Checks for presence of ingestion files
+                json_file_name = file.replace(".gkg.csv", ".json")
+                timestamp_str = json_file_name.split(".")[0]
+
+                if es_check_data(timestamp_str):
+                    write_all(f"Transformation skipped: {json_file_name} already exists")
+
+                    # Removes the already processed file
+                    os.remove(raw_file_path)
+                    write_all(f"Deleted processed CSV file: {raw_file_path}", [LOG_FILE, JSON_LOG_FILE])
+
+                    # Cleaning the corresponding JSON folder (if present)
+                    json_folder = file.split(".")[0] + ".gkg.json"
+                    json_folder_full = os.path.join(src_path, json_folder)
+                    if os.path.exists(json_folder_full):
+                        try:
+                            shutil.rmtree(json_folder_full)
+                            write_all(f"Deleted processed Spark folder: {json_folder}", [LOG_FILE, JSON_LOG_FILE])
+                        except Exception as e:
+                            write_all(f"Error deleting Spark folder {json_folder}: {e}", [LOG_FILE, JSON_LOG_FILE])
+
+                    continue
+
+
+                
+                if not os.path.exists(raw_file_path):
+                    write_all(f"File not present in folder, skipping transformation: {file}", [LOG_FILE, JSON_LOG_FILE])
+                    continue
+
+                with open(PYSPARK_LOG_FILE, "w") as f: f.write(timestamp_str)
+                write_all(f"Transforming file into JSON: {file}")
+                try:
+                    run_pipeline(raw_file_path, json_output_path)
+                    
+                except:
+                    write_all(f"File not present in folder, skipping transformation: {file}", [LOG_FILE, JSON_LOG_FILE])
+                
+                # Remove the CSV file using its full path
+                write_all(f"Transformed file into JSON: {file}")
+                with open(PYSPARK_LOG_FILE, "w") as f: f.write("")
+                sleep(1)
+                if os.path.exists(raw_file_path):
+                    os.remove(raw_file_path)
                 write_all(f"Deleted processed CSV file: {raw_file_path}", [LOG_FILE, JSON_LOG_FILE])
 
-                # Cleaning the corresponding JSON folder (if present)
+                # Cleaning the corresponding JSON folder
                 json_folder = file.split(".")[0] + ".gkg.json"
                 json_folder_full = os.path.join(src_path, json_folder)
-                if os.path.exists(json_folder_full):
-                    try:
-                        shutil.rmtree(json_folder_full)
-                        write_all(f"Deleted processed Spark folder: {json_folder}", [LOG_FILE, JSON_LOG_FILE])
-                    except Exception as e:
-                        write_all(f"Error deleting Spark folder {json_folder}: {e}", [LOG_FILE, JSON_LOG_FILE])
+                try:
+                    shutil.rmtree(json_folder_full)
+                    write_all(f"Deleted processed Spark folder: {json_folder}", [LOG_FILE, JSON_LOG_FILE])
+                except Exception as e:
+                    write_all(f"Error deleting Spark folder {json_folder}: {e}", [LOG_FILE, JSON_LOG_FILE])
 
-                continue
-            
-            if not os.path.exists(raw_file_path):
-                write_all(f"File not present in folder, skipping transformation: {file}", [LOG_FILE, JSON_LOG_FILE])
-                continue
-
-            with open(PYSPARK_LOG_FILE, "w") as f: f.write(timestamp_str)
-            write_all(f"Transforming file into JSON: {file}")
-            try:
-                run_pipeline(raw_file_path, json_output_path)
-                
-            except:
-                write_all(f"File not present in folder, skipping transformation: {file}", [LOG_FILE, JSON_LOG_FILE])
-            
-            # Remove the CSV file using its full path
-            write_all(f"Transformed file into JSON: {file}")
-            with open(PYSPARK_LOG_FILE, "w") as f: f.write("")
-            sleep(1)
-            if os.path.exists(raw_file_path):
-                os.remove(raw_file_path)
-            write_all(f"Deleted processed CSV file: {raw_file_path}", [LOG_FILE, JSON_LOG_FILE])
-
-            # Cleaning the corresponding JSON folder
-            json_folder = file.split(".")[0] + ".gkg.json"
-            json_folder_full = os.path.join(src_path, json_folder)
-            try:
-                shutil.rmtree(json_folder_full)
-                write_all(f"Deleted processed Spark folder: {json_folder}", [LOG_FILE, JSON_LOG_FILE])
-            except Exception as e:
-                write_all(f"Error deleting Spark folder {json_folder}: {e}", [LOG_FILE, JSON_LOG_FILE])
-
-            write_all(f"Loading JSON file into Elasticsearch: {json_file_name}", [LOG_FILE, JSON_LOG_FILE])
+                write_all(f"Loading JSON file into Elasticsearch: {json_file_name}", [LOG_FILE, JSON_LOG_FILE])
 
 def delete_processed_json():
     '''
