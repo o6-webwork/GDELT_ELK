@@ -1,0 +1,8 @@
+# GDELT_ELK/polling_service/requirements.txt
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+elasticsearch==8.17.2
+apscheduler         # For scheduling tasks
+python-dotenv     # For loading .env if running locally
+pytz              # For timezone handling
+pandas==2.2.2
