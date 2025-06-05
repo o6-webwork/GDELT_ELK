@@ -13,6 +13,8 @@ volumes:
     driver: local
   csvfiles:
     driver: local
+  postgres_data:
+    driver: local
 
 networks:
   elastic:
@@ -212,10 +214,14 @@ services:
 
   reportsui_backend:
     build: ./reports-ui/backend
+    environment:
+      - DATABASE_URL=${DATABASE_URL} # for DB connection
     ports:
       - "8000:8000"
     depends_on:
       es01:
+        condition: service_healthy
+      postgres_db: # Now explicitly depends on Postgres
         condition: service_healthy
     networks:
       - elastic
@@ -226,4 +232,46 @@ services:
       - "8501:8501"
     networks:
       - elastic
+    # volumes:
+    #   - ./reports-ui/frontend:/app/ # Maps host ./reports-ui/frontend to /app in container
+    volumes:
+    - ./reports-ui/frontend:/app 
+
+  postgres_db: 
+    image: postgres:17 
+    container_name: gdelt_postgres_db 
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data 
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    networks:
+      - elastic
+    restart: unless-stopped # Restart policy
+    healthcheck: # Checks if the database is ready to accept connections
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  polling_service:
+    build:
+      context: .  # Build context is now GDELT_ELK/
+      dockerfile: ./polling-service/Dockerfile
+    container_name: gdelt_polling_service
+    environment:
+      - DATABASE_URL=${DATABASE_URL} # Needs to connect to PostgreSQL
+      - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS} # Example: default to 60s
+      - POLLING_SERVICE_INITIAL_WAIT=${POLLING_SERVICE_INITIAL_WAIT} # Example: default to 15s
+    depends_on:
+      postgres_db:
+        condition: service_healthy # Must wait for DB to be ready
+      es01: # Must wait for Elasticsearch to be ready
+        condition: service_healthy
+    networks:
+      - elastic
+    restart: always
 
