@@ -10,6 +10,7 @@ from elasticsearch import Elasticsearch
 import pytz
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from contextlib import asynccontextmanager 
 
 
 from data_loader import get_fields_from_elasticsearch, load_data_from_elasticsearch
@@ -74,7 +75,25 @@ es = Elasticsearch(
     verify_certs=False  
 )
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Code to run on startup
+    print("FastAPI application startup: Initializing database...")
+    try:
+        # calls Base.metadata.create_all(bind=engine). Checks if tables exist and only creates those that are missing. It does not modify existing tables.
+        create_db_tables() 
+        print("Database table check/creation process completed.")
+    except Exception as e:
+        print(f"Error during startup table creation: {e}")
+        # Depending on the severity, you might want to raise the error
+        # or prevent the app from fully starting if DB is critical.
+    
+    yield # The application runs here
+
+    # Code to run on shutdown
+    print("FastAPI application shutdown.")
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
