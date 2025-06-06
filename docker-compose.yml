@@ -221,7 +221,7 @@ services:
     depends_on:
       es01:
         condition: service_healthy
-      postgres_db: # Now explicitly depends on Postgres
+      postgres_db: 
         condition: service_healthy
     networks:
       - elastic
@@ -259,17 +259,17 @@ services:
 
   polling_service:
     build:
-      context: .  # Build context is now GDELT_ELK/
+      context: . 
       dockerfile: ./polling-service/Dockerfile
     container_name: gdelt_polling_service
     environment:
-      - DATABASE_URL=${DATABASE_URL} # Needs to connect to PostgreSQL
-      - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS} # Example: default to 60s
-      - POLLING_SERVICE_INITIAL_WAIT=${POLLING_SERVICE_INITIAL_WAIT} # Example: default to 15s
+      - DATABASE_URL=${DATABASE_URL} # connect to PostgreSQL
+      - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS} 
+      - POLLING_SERVICE_INITIAL_WAIT=${POLLING_SERVICE_INITIAL_WAIT} 
     depends_on:
       postgres_db:
         condition: service_healthy # Must wait for DB to be ready
-      es01: # Must wait for Elasticsearch to be ready
+      es01: 
         condition: service_healthy
     networks:
       - elastic
