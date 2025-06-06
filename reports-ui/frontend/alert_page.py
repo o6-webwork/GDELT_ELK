@@ -1,16 +1,14 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go # <-- Add this import
+import plotly.graph_objects as go
 import requests
 import datetime
 from streamlit_autorefresh import st_autorefresh
 import os
 import base64 
-import streamlit.components.v1 as components # For embedding HTML
-import time
 
-BACKEND_URL = "http://reportsui_backend:8000" # Or your actual backend URL
+BACKEND_URL = "http://reportsui_backend:8000" # backend URL
 
 @st.cache_data # Cache this so it's fetched once
 def fetch_param_sets_from_backend():
@@ -20,7 +18,6 @@ def fetch_param_sets_from_backend():
         return response.json()
     except Exception as e:
         st.error(f"Failed to fetch PARAM_SETS from backend: {e}")
-        # Fallback to a hardcoded minimal default if backend is unavailable during dev
         return None
 
 def acknowledge_alert_in_api(alert_id: int):
@@ -43,7 +40,7 @@ def acknowledge_alert_in_api(alert_id: int):
         st.error(f"Error acknowledging alert {alert_id}: {e}")
         return None
 
-# --- Function to generate HTML to play sound ---
+# Function to generate HTML to play sound
 def play_alert_sound(sound_file_name="alert.mp3", audio_format="mpeg"): # Path relative to static folder
     """
     Plays an alert sound using an invisible HTML5 audio tag with autoplay,
@@ -207,7 +204,7 @@ def perform_one_off_alert_check(user_query_dict,
 def show_alert_page():
     st.title("🚨 GDELT Alerting")
 
-    # --- Session State for "More Detail" button ---
+    # session state for "More Detail" button 
     if 'show_alert_graph' not in st.session_state:
         st.session_state.show_alert_graph = False
     if 'alert_timeseries_data' not in st.session_state:
@@ -216,6 +213,7 @@ def show_alert_page():
         st.session_state.alert_details_for_rerun = None
     if 'monitored_tasks_list' not in st.session_state:
         st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api()
+
     # session state variable for sound control
     if 'sound_played_for_alert_instance_id' not in st.session_state:
         st.session_state.sound_played_for_alert_instance_id = None
@@ -238,7 +236,7 @@ def show_alert_page():
     if 'current_graph_historical_alerts' not in st.session_state:
         st.session_state.current_graph_historical_alerts = []
 
-    # --- Callbacks to reset graph visibility ---
+    # Callbacks to reset graph visibility
     def reset_graph():
         st.session_state.show_alert_graph = False
         st.session_state.alert_details_for_rerun = None # Also clear previous alert details
@@ -254,22 +252,18 @@ def show_alert_page():
         ('Live Monitoring', 'Custom Date'),
         horizontal=True,
         key="operation_mode_radio",
-        on_change=reset_graph # Reset graph on mode change
+        on_change=reset_graph
     )
 
     current_operation_mode = st.session_state.get("operation_mode_radio", "Custom Date") # Get current mode
 
-    # --- Clear stale graph data if mode is inconsistent with graph origin ---
+    # --- Clear graph data if mode is inconsistent with graph origin ---
     if st.session_state.get('show_alert_graph', False): # If a graph *thinks* it should be shown
         if st.session_state.graph_data_origin_mode and \
            st.session_state.graph_data_origin_mode != current_operation_mode:
             print(f"ALERT_PAGE: Stale graph detected. Origin: {st.session_state.graph_data_origin_mode}, Current Mode: {current_operation_mode}. Resetting graph.")
             reset_graph() # Call reset_graph to clear everything including show_alert_graph
 
-    #st.markdown("---") 
-
-    end_date_str = None # Initialize
-    current_interval_for_backend = "1d" # Default for custom
 
     if operation_mode == 'Custom Date': # Label reflects its new fixed nature
         st.markdown("#### Perform a check for a Specific Date (Daily Interval)")
@@ -287,6 +281,7 @@ def show_alert_page():
             )
         
         end_date_str_one_off = selected_end_date.strftime("%Y-%m-%d")
+
         # For this mode, date_mode is always "Custom Date" and interval is "1d"
         date_mode_for_payload = "Custom Date" 
         interval_one_off = "1d"
@@ -297,7 +292,7 @@ def show_alert_page():
                 placeholder="Enter Query: e.g. Trump AND China ",
                 key="one_off_query_string", 
                 on_change=reset_graph,
-                label_visibility="collapsed" # You can choose to keep or remove this
+                label_visibility="collapsed"
             )
         
         with col_button:
@@ -305,20 +300,19 @@ def show_alert_page():
         
         one_off_alert_placeholder = st.empty() 
 
-        if adhoc_check_button_pressed: #
+        if adhoc_check_button_pressed: 
             reset_graph() # Use updated callback
-            if not query_string_one_off: #
+            if not query_string_one_off: 
                 one_off_alert_placeholder.warning("Please enter a query string") #
             else:
                 user_query = {"query": {"query_string": {"query": query_string_one_off, "fields": ["*"]}}} #
                 perform_one_off_alert_check(user_query, 
                                             date_mode_for_payload, 
                                             end_date_str_one_off, 
-                                            interval_one_off) #
+                                            interval_one_off) 
                 # If graph data is generated by perform_one_off_alert_check and intended to be shown:
                 if st.session_state.alert_timeseries_data: # Check if data was populated
                     st.session_state.graph_data_origin_mode = "Custom Date" # Set origin
-                    st.session_state.show_alert_graph = True # Explicitly set to show if data is there
 
         # Display results for One-Off Alert Check
         if st.session_state.alert_details_for_rerun:
@@ -332,13 +326,12 @@ def show_alert_page():
                     st.write(f"**Type:** {current_alert_data.get('alert_type', 'Unknown')}")
                     st.write(f"**Reason:** {current_alert_data.get('reason', 'No specific reason provided.')}")
 
-                    # --- Play sound for alert ---
-                    # Use a combination of current inputs to create a somewhat unique ID for this ad-hoc alert event
+                    # Play sound for alert 
+                    # Use a combination of current inputs to create unique ID for this ad-hoc alert event
                     adhoc_alert_instance_id = f"adhoc_{date_mode_for_payload}_{end_date_str_one_off}_{interval_one_off}_{query_string_one_off}_{current_alert_data.get('timestamp')}"
                     if st.session_state.sound_played_for_alert_instance_id != adhoc_alert_instance_id:
                         play_alert_sound("alert.mp3") # Path to your sound file in static folder
                         st.session_state.sound_played_for_alert_instance_id = adhoc_alert_instance_id
-                    # --- End sound logic ---
 
                     if st.button("More Detail", key="one_off_alert_more_detail"):
                         st.session_state.show_alert_graph = not st.session_state.show_alert_graph
@@ -363,7 +356,7 @@ def show_alert_page():
         st_autorefresh(interval=refresh_interval_ms, key="persistent_monitoring_refresher")
         # When st_autorefresh triggers a rerun, it will call fetch_monitored_tasks_from_api() below.
 
-        # --- Form for adding a new monitored query ---
+        # Form for adding a new monitored query
         with st.form(key="add_new_monitoring_task_form"):
             st.subheader("Add New Query")
             
@@ -372,12 +365,12 @@ def show_alert_page():
             with col_query_input_live:
                 new_query_to_monitor = st.text_input( #
                     "Query String to Monitor: e.g. Singapore AND Trump", 
-                    key="new_live_query_input_form", 
+                    key="new_query_input", 
                     placeholder="Query String to Monitor: e.g. Singapore AND Trump",
                     label_visibility='collapsed'
                 )
 
-            # --- Popover for Custom Parameters ---
+            # Popover for Custom Parameters
             with st.popover("🔧 Customize Alert Parameters (Optional)"):
                 st.markdown("**Override default parameters for this query:**")
                 # Store popover inputs temporarily in session state before form submission
@@ -391,7 +384,7 @@ def show_alert_page():
                 )
                 st.session_state.current_custom_params['custom_baseline_window_pd_str'] = st.text_input(
                     "Baseline Window (e.g., 1d, 7d):", 
-                    value=st.session_state.current_custom_params.get('custom_baseline_window_pd_str', ''),
+                    value=st.session_state.current_custom_params.get('custom_baseline_window_pd_str', '1d'),
                     placeholder="Default: 1d",
                     key="popover_baseline_window"
                 )
@@ -418,14 +411,6 @@ def show_alert_page():
                     key="popover_build_thresh"
                 )
 
-            # # Display what custom params are currently set (from session_state)
-            # active_custom_params = {k:v for k,v in st.session_state.current_custom_params.items() if (isinstance(v, (int,float))) or (isinstance(v,str) and v)}
-            # if active_custom_params:
-            #     st.caption("Current custom settings to be applied:")
-            #     st.json(active_custom_params)
-            # else:
-            #     st.caption("Using default alert parameters for the 15-min interval.")
-
             # Form submit button
             with col_submit_button_live:
                 submitted_new_task_form = st.form_submit_button("Start Monitoring", type="primary")
@@ -445,6 +430,8 @@ def show_alert_page():
                               'custom_build_threshold']:
                     if st.session_state.current_custom_params.get(p_key) is not None:
                         payload[p_key] = st.session_state.current_custom_params[p_key]
+
+                st.write(payload)
                 
                 result = add_monitored_task_to_api(payload) # Pass the full payload
                 if result:
@@ -460,6 +447,7 @@ def show_alert_page():
             st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api()
             st.session_state.sound_played_for_alert_instance_id = None # Reset sound flag as we are getting fresh statuses
             st.session_state.sounded_persistent_alert_ids.clear() # Clear the set
+            st.session_state.show_alert_graph = False #
             st.rerun()
 
         # --- Fetch tasks on each rerun when in this mode (due to autorefresh) ---
@@ -553,7 +541,7 @@ def show_alert_page():
                         if count_val is not None: st.write(f"  - **Count:** {count_val}") #
                         # ...
 
-                        # --- Buttons for Alert: Acknowledge and View Graph ---
+                        # Buttons for Alert: Acknowledge and View Graph
                         col_ack, col_graph, col_stop_mon, col_spacer = st.columns([1, 1, 1, 4])
                         with col_ack:
                             if not is_alert_acknowledged: # Show Acknowledge button only if not yet acknowledged
@@ -598,7 +586,7 @@ def show_alert_page():
                              if st.button("🚫 Stop Monitoring", key=f"stop_monitoring_{task_id}", type="secondary", use_container_width=True): #
                                 stop_monitoring_task_in_api(task_id) #
                                 st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api() #
-                                st.rerun() #    '
+                                st.rerun() 
 
                     else: # Case where latest_alert or alert_type is None (no active alert to acknowledge/graph)
                         st.caption(":green-background[No alert generated from the latest check.]") #
@@ -631,8 +619,8 @@ def show_alert_page():
                         pa_count = pa_metrics.get("count")
                         pa_type = primary_alert_details.get("alert_type", "Alert")
                         if pa_timestamp_str and pa_count is not None:
-                            primary_alert_ts_to_skip_in_historical = pa_timestamp_str # For de-duplication
                             pa_dt = pd.to_datetime(pa_timestamp_str)
+                            primary_alert_ts_to_skip_in_historical = pa_dt
                             fig.add_trace(go.Scatter(
                                 x=[pa_dt], y=[pa_count], mode='markers',
                                 marker=dict(color='red', size=15, symbol='circle', line=dict(width=1,color='black')),
@@ -644,7 +632,7 @@ def show_alert_page():
                     historical_alerts = st.session_state.get("current_graph_historical_alerts", [])
                     if historical_alerts:
 
-                        # 1. Group historical alerts by type and collect their data points
+                        # Group historical alerts by type and collect their data points
                         historical_points_by_type = {} 
                         # Format: {"Spike": {"x": [dt1, dt2], "y": [c1, c2], "text": [t1, t2]}, ...}
 
@@ -656,15 +644,11 @@ def show_alert_page():
                             # For this example, I'll assume hist_alert has 'count' directly or you look it up in graph_df
                             hist_count_val = hist_alert.get('count') # Assuming historical alerts from DB contain the count
                             hist_dt = pd.to_datetime(hist_ts_str).tz_convert('Asia/Singapore')
-
+                            if hist_dt == primary_alert_ts_to_skip_in_historical: # Avoid re-plotting primary alert
+                                continue
 
                             if hist_dt and hist_count_val is not None:
                                 try: 
-                                    # Optional: Verify this point exists in graph_df or use its exact y-value if needed
-                                    # For simplicity, using hist_count_val directly from historical record
-                                    if hist_dt == primary_alert_ts_to_skip_in_historical: # Avoid re-plotting primary alert
-                                        continue
-
                                     if hist_type not in historical_points_by_type:
                                         historical_points_by_type[hist_type] = {"x": [], "y": [], "text": []}
                                     
@@ -676,9 +660,8 @@ def show_alert_page():
                                 except Exception as e:
                                     st.warning(f"Could not process/plot historical alert at {hist_ts_str}: {e}")
 
-                        # 2. Add one Scatter trace per alert type for historical alerts
-                        marker_symbols = ['circle-open', 'square-open', 'diamond-open', 'cross-thin-open', 'x-thin-open']
-                        marker_colors = ['orange', 'green', 'purple', 'brown', 'pink']
+                        # different colours for different alert type. for legend.
+                        marker_colors = ['orange', 'green', 'purple']
 
                         for i, (alert_type, data_points) in enumerate(historical_points_by_type.items()):
                             if data_points["x"]: 
