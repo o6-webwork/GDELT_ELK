@@ -34,16 +34,16 @@ class MonitoredTask(Base):
     # These will store the user's override. If NULL, the system uses defaults from PARAM_SETS.
 
     # General parameters
-    custom_baseline_window_pd_str = Column(String, nullable=True, comment="Pandas offset string e.g., '7d', '24h', '1d'. Overrides PARAM_SETS.BASELINE_WINDOW_FOR_ROLLING.")
-    custom_min_periods_baseline = Column(Integer, nullable=True, comment="Overrides PARAM_SETS.MIN_PERIODS_BASELINE.")
-    custom_min_count_for_alert = Column(Integer, nullable=True, comment="Overrides PARAM_SETS.MIN_COUNT_FOR_ALERT.")
+    custom_baseline_window_pd_str = Column(String, default='1d', nullable=True, comment="Pandas offset string e.g., '7d', '24h', '1d'. Overrides PARAM_SETS.BASELINE_WINDOW_FOR_ROLLING.")
+    custom_min_periods_baseline = Column(Integer, default=12, nullable=True, comment="Overrides PARAM_SETS.MIN_PERIODS_BASELINE.")
+    custom_min_count_for_alert = Column(Integer, default=1, nullable=True, comment="Overrides PARAM_SETS.MIN_COUNT_FOR_ALERT.")
     
     # Spike Detection specific (Z-score)
-    custom_spike_threshold = Column(Float, nullable=True, comment="Overrides PARAM_SETS.SPIKE_THRESHOLD.")
+    custom_spike_threshold = Column(Float, default=2.5, nullable=True, comment="Overrides PARAM_SETS.SPIKE_THRESHOLD.")
     
     # Build Detection specific (replaces separate short/extended builds)
-    custom_build_window_periods_count = Column(Integer, nullable=True, comment="Number of task's own intervals. Overrides PARAM_SETS.BUILD_WINDOW_PERIODS_COUNT.")
-    custom_build_threshold = Column(Float, nullable=True, comment="Overrides PARAM_SETS.BUILD_THRESHOLD.")
+    custom_build_window_periods_count = Column(Integer, default=8, nullable=True, comment="Number of task's own intervals. Overrides PARAM_SETS.BUILD_WINDOW_PERIODS_COUNT.")
+    custom_build_threshold = Column(Float, default=2.2, nullable=True, comment="Overrides PARAM_SETS.BUILD_THRESHOLD.")
 
     def __repr__(self):
         return f"<MonitoredTask(id={self.id}, query='{self.query_string[:30]}...', active={self.is_active})>"
