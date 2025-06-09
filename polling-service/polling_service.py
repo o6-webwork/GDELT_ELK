@@ -6,6 +6,7 @@ import pytz
 from sqlalchemy.orm import Session
 from elasticsearch import Elasticsearch
 import sys
+import pandas as pd
 
 # Assuming database.py and alert_generation.py are now in a 'shared_code' subdirectory
 # and that directory is in PYTHONPATH (see Dockerfile)
@@ -17,7 +18,6 @@ except ModuleNotFoundError:
     print("ERROR: Could not import shared_code. Ensure alert_generation.py and database.py are accessible.")
     print("       Check Dockerfile COPY paths and PYTHONPATH environment variable if running in Docker.")
     # Fallback for local testing if files are in a sibling directory structure
-    import sys
     sys.path.append(os.path.join(os.path.dirname(__file__), '../reports-ui/backend'))
     from database import SessionLocal, MonitoredTask, AlertHistory
     from alert_generation import check_alerts_for_query, sanitize_alert_info
@@ -34,160 +34,123 @@ es_client = Elasticsearch(
 )
 
 POLL_INTERVAL_SECONDS = 60 # Check for due tasks every 60 seconds
+INGESTION_GRACE_PERIOD_SECONDS = 120
 SGT_TIMEZONE = pytz.timezone("Asia/Singapore")
 
-
-def get_due_tasks(db: Session) -> list[MonitoredTask]:
-    """
-    Fetches tasks that are due for an alert check.
-    A task is due if:
-    1. last_checked_at IS NULL (never checked)
-    OR
-    2. last_checked_at + interval_minutes <= now_utc
-    This is equivalent to: last_checked_at < now_utc - interval_minutes
-    """
-    now_utc = datetime.datetime.now(pytz.utc)
-    print(f"[{now_utc.isoformat()}] Getting due tasks...")
-
+def get_latest_bucket_end_time(reference_time: datetime.datetime, interval_minutes: int) -> datetime.datetime:
+    """Calculates the end time of the bucket that the reference_time falls into."""
+    if interval_minutes <= 0:
+        raise ValueError("Interval must be positive.")
     
-    active_tasks = db.query(MonitoredTask).filter(MonitoredTask.is_active == True).order_by(MonitoredTask.last_checked_at).all()
-    
-    due_tasks_list = []
-    for task in active_tasks:
-        # Ensure task.last_checked_at is UTC aware if it came from DB without explicit tz handling by SQLAlchemy for this query
-        is_due = False
-        if task.last_checked_at is None:
-            is_due = True
-            print(f"  Task ID {task.id} is due (never checked).")
+    interval_seconds = interval_minutes * 60
 
-        else:
-            # Ensure task.last_checked_at is UTC aware
-            last_checked_utc = task.last_checked_at
-            if last_checked_utc.tzinfo is None: # Should ideally be stored as aware by SQLAlchemy
-                last_checked_utc = pytz.utc.localize(last_checked_utc)
-            else:
-                last_checked_utc = last_checked_utc.astimezone(pytz.utc)
-            
-            due_time = last_checked_utc + datetime.timedelta(minutes=task.interval_minutes)
-            if now_utc >= due_time:
-                is_due = True
-                print(f"  Task ID {task.id} is due (Last checked: {last_checked_utc.isoformat()}, Interval: {task.interval_minutes}m, Due at: {due_time.isoformat()})")
-        
-        if is_due:
-            due_tasks_list.append(task)
+    # Converts the input datetime object into a Unix timestamp (the total number of seconds that have passed since the 1970 epoch).
+    reference_timestamp = reference_time.timestamp()
 
-    if not due_tasks_list and active_tasks: # Only print if there were active tasks but none due
-        print(f"  No tasks currently due among {len(active_tasks)} active tasks.")
+    # seconds that have passed since the start of the current bucket.
+    remainder = reference_timestamp % interval_seconds
 
-    return due_tasks_list
+    current_bucket_start_ts = reference_timestamp - remainder
+    last_completed_bucket_end_ts = current_bucket_start_ts
+    return datetime.datetime.fromtimestamp(last_completed_bucket_end_ts, tz=pytz.utc)
+
+def fetch_active_monitored_tasks(db: Session) -> list[MonitoredTask]:
+    """Fetches all active tasks from the database."""
+    return db.query(MonitoredTask).filter(MonitoredTask.is_active == True).all()
+    # active_tasks = db.query(MonitoredTask).filter(MonitoredTask.is_active == True).order_by(MonitoredTask.last_checked_at).all()
 
 
 def process_single_task(db: Session, task: MonitoredTask):
-    """Processes a single monitoring task."""
+    """
+    Checks for and processes all completed buckets for a single task since its last check.
+    """
     current_time_sgt_str = datetime.datetime.now(SGT_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %Z")
     print(f"[{current_time_sgt_str}] Processing task ID {task.id}: '{task.query_string[:50]}...'")
 
-    try:
-        user_query_payload = {"query": {"query_string": {"query": task.query_string, "fields": ["*"]}}}
+    interval_minutes = task.interval_minutes
+    now_utc = datetime.datetime.now(pytz.utc)
+
+    # We can only check buckets that have fully passed PLUS a grace period for data ingestion
+    check_limit_time = now_utc - datetime.timedelta(seconds=INGESTION_GRACE_PERIOD_SECONDS)
+
+    # Determine the end time of the single most recent, fully completed bucket
+    latest_completed_bucket_end = get_latest_bucket_end_time(check_limit_time, interval_minutes)
+
+    # Get the last check time and ensure it's timezone-aware (UTC)
+    last_checked_utc = None
+    if task.last_checked_at:
+        last_checked_utc = pd.to_datetime(task.last_checked_at).astimezone(pytz.utc)
+
+    # Check completed bucket
+    if last_checked_utc is None or latest_completed_bucket_end > last_checked_utc:
+        (f"Task {task.id}: New completed bucket found ending at {latest_completed_bucket_end.astimezone(SGT_TIMEZONE).isoformat()}. Proceeding with check.")
         
-        # For live monitoring, end_datetime is always "now" in SGT for consistency with frontend expectation
-        end_datetime_for_check = datetime.datetime.now(SGT_TIMEZONE)
-        
-        interval_string = f"{task.interval_minutes}m"
+        # Convert UTC bucket end time to SGT for the API call, as check_alerts_for_query expects SGT
+        end_datetime_for_check_sgt = latest_completed_bucket_end.astimezone(SGT_TIMEZONE) - datetime.timedelta(seconds = 1)
 
-        # custom parameters from the MonitoredTask ORM object ---
-        task_custom_params_from_db = {
-            "custom_baseline_window_pd_str": task.custom_baseline_window_pd_str,
-            "custom_min_periods_baseline": task.custom_min_periods_baseline,
-            "custom_min_count_for_alert": task.custom_min_count_for_alert,
-            "custom_spike_threshold": task.custom_spike_threshold,
-            "custom_build_window_periods_count": task.custom_build_window_periods_count,
-            "custom_build_threshold": task.custom_build_threshold,
-        }
-        # Filter out None values, so only explicitly set custom params are passed
-        # This ensures that if a custom param is NULL in DB (None in ORM object),
-        # the alert_generation logic will use its own internal defaults from PARAM_SETS.
-        task_specific_params_for_alert_gen = {
-            k: v for k, v in task_custom_params_from_db.items() if v is not None
-        }
-        if not task_specific_params_for_alert_gen: # If all custom params were None
-            task_specific_params_for_alert_gen = None # Pass None to use full defaults for interval
-        
-        print(f" Task ID {task.id}: Using custom params: {task_specific_params_for_alert_gen if task_specific_params_for_alert_gen else 'None (will use defaults for interval)'}")
+        task_custom_params = {k: v for k, v in task.__dict__.items() if k.startswith('custom_') and v is not None}
+        if not task_custom_params:
+            task_custom_params = None
 
-        alert_result, start_time, end_time = check_alerts_for_query(
-            es_client,
-            user_query_payload,
-            end_datetime_for_check,
-            interval_str=interval_string,
-            task_custom_params=task_specific_params_for_alert_gen 
-        )
-
-        print(f"polling alert result: {alert_result}")
-
-        if not alert_result: # check_alerts_for_query might return None or a dict
-            print(f"  Task ID {task.id}: No alert result structure returned from check_alerts_for_query.")
-            task.last_checked_at = datetime.datetime.now(pytz.utc) # Still update last_checked
-            db.commit()
-            return
-
-        if alert_result.get('alert_triggered'):
-            print(f"  ALERT TRIGGERED for task {task.id}: {alert_result.get('alert_type')} - {alert_result.get('reason')}")
-            
-            alert_ts_iso = alert_result.get('timestamp')
-            # Convert alert timestamp from SGT (as returned by check_alerts_for_query) to UTC for DB
-            db_alert_timestamp_utc = datetime.datetime.now(pytz.utc) # Default to now_utc if parsing fails
-            if alert_ts_iso:
-                try:
-                    # The timestamp from alert_info should be SGT aware from alert_generation's processing
-                    sgt_alert_timestamp = datetime.datetime.fromisoformat(alert_ts_iso)
-                    db_alert_timestamp_utc = sgt_alert_timestamp.astimezone(pytz.utc)
-                except ValueError:
-                    print(f"  Warning: Could not parse alert timestamp '{alert_ts_iso}'. Using current UTC time for alert record.")
-
-
-            new_alert = AlertHistory(
-                task_id=task.id,
-                alert_timestamp=db_alert_timestamp_utc,
-                recorded_at=datetime.datetime.now(pytz.utc),
-                alert_type=alert_result.get('alert_type'),
-                reason=alert_result.get('reason'),
-                count=alert_result.get('count'),
-                baseline_mean=alert_result.get('baseline_mean'),
-                baseline_std=alert_result.get('baseline_std'),
-                z_score=alert_result.get('z_score'),
-                build_ratio=alert_result.get('build_ratio'),
-                extended_build_ratio=alert_result.get('extended_build_ratio'),
-                current_interval_used=alert_result.get('current_interval')
+        try:
+            alert_result, start_time, end_time = check_alerts_for_query(
+                es_client,
+                {"query": {"query_string": {"query": task.query_string, "fields": ["*"]}}},
+                end_datetime_for_check_sgt,
+                interval_str=f"{interval_minutes}m",
+                task_custom_params=task_custom_params,
             )
-            db.add(new_alert)
-            print(f"  Saved alert to AlertHistory for task ID {task.id}")
-        else:
-            print(f"  No alert for task {task.id}. Message: {alert_result.get('message', 'OK')}")
 
-        task.last_checked_at = datetime.datetime.now(pytz.utc)
-        db.commit()
-        print(f"  Updated last_checked_at for task ID {task.id}")
+            if not alert_result:
+                print(f"Task ID {task.id}: No alert result structure returned for bucket check.")
 
-    except Exception as e:
-        print(f"  ERROR processing task ID {task.id}: {e}")
-        import traceback
-        traceback.print_exc()
-        db.rollback() # Rollback session on error for this task
-    finally:
-        pass
+            elif alert_result.get('alert_triggered'):
+                print(f"ALERT TRIGGERED for task {task.id}: {alert_result.get('alert_type')} - {alert_result.get('reason')}")
+                # save alert to the AlertHistory table
+                alert_ts_iso = alert_result.get('timestamp')
+                db_alert_timestamp_utc = datetime.datetime.now(pytz.utc) # Default
+                if alert_ts_iso:
+                    try:
+                        sgt_alert_timestamp = datetime.datetime.fromisoformat(alert_ts_iso)
+                        db_alert_timestamp_utc = sgt_alert_timestamp.astimezone(pytz.utc)
+                    except ValueError:
+                        print(f"Could not parse alert timestamp '{alert_ts_iso}'.")
+                
+                drop_keys = ['timestamp', 'alert_triggered', 'params_used', 'timeseries_data']
+                for key in drop_keys:
+                    alert_result.pop(key, None)
 
+                new_alert = AlertHistory(task_id=task.id, alert_timestamp=db_alert_timestamp_utc, recorded_at=datetime.datetime.now(pytz.utc), **alert_result)
+                db.add(new_alert)
+                print(f"Saved alert to AlertHistory for task ID {task.id}")
+            else:
+                print(f"No alert for task {task.id} in bucket ending at {end_datetime_for_check_sgt.isoformat()}.")
+
+            task.last_checked_at = latest_completed_bucket_end # This is a UTC datetime
+            db.commit()
+            print(f"Task {task.id}: Updated last_checked_at to {latest_completed_bucket_end.isoformat()}")
+
+        except Exception as e:
+            print(f"ERROR processing task ID {task.id} for bucket {latest_completed_bucket_end.isoformat()}: {e}")
+            import traceback
+            traceback.print_exc()
+            db.rollback()
+    else:
+        print(f"Task {task.id}: No new completed bucket to check. Last checked at {last_checked_utc.isoformat() if last_checked_utc else 'never'}.")
+
+    # ----- 
 
 def main_polling_loop():
     print(f"Polling service started at {datetime.datetime.now(SGT_TIMEZONE).isoformat()}. Checking for due tasks every {POLL_INTERVAL_SECONDS} seconds.")
     while True:
-        db = None # Initialize db to None
+        db = SessionLocal() # Create a new session for this polling cycle
         try:
-            db = SessionLocal() # Create a new session for this polling cycle
-            due_tasks = get_due_tasks(db)
-            if due_tasks:
-                print(f"Found {len(due_tasks)} due task(s) at {datetime.datetime.now(SGT_TIMEZONE).isoformat()}.")
-                for task in due_tasks:
+            print(f"--- Starting new polling cycle ---")
+            active_tasks = fetch_active_monitored_tasks(db)
+            print(f"Found {len(active_tasks)} active tasks to check.")
+
+            if active_tasks:
+                for task in active_tasks:
                     process_single_task(db, task) 
             else: 
                 print(f"No tasks due for checking at {datetime.datetime.now(SGT_TIMEZONE).isoformat()}.")

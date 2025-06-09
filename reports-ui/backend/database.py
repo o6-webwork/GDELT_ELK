@@ -67,7 +67,7 @@ class AlertHistory(Base):
     z_score = Column(Float, nullable=True)
     build_ratio = Column(Float, nullable=True)
     extended_build_ratio = Column(Float, nullable=True)
-    current_interval_used = Column(String, nullable=True)
+    current_interval = Column(String, nullable=True)
 
 
     # For storing the timeseries_data that led to the alert, JSONB is good in PostgreSQL
