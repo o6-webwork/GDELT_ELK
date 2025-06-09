@@ -96,13 +96,6 @@ def calculate_baseline_and_alerts(timeseries_df: pd.DataFrame,
             effective_params["BUILD_WINDOW_PERIODS_COUNT"] = task_custom_params["custom_build_window_periods_count"]
         if task_custom_params.get("custom_build_threshold") is not None:
             effective_params["BUILD_THRESHOLD"] = task_custom_params["custom_build_threshold"]
-        
-        # Add other custom params overrides here if you defined more (e.g., DEFAULT_STD_DEV, MIN_STD_DEV)
-        # For example:
-        # if task_custom_params.get("custom_default_std_dev") is not None:
-        #     effective_params["DEFAULT_STD_DEV"] = task_custom_params["custom_default_std_dev"]
-        # if task_custom_params.get("custom_min_std_dev") is not None:
-        #     effective_params["MIN_STD_DEV"] = task_custom_params["custom_min_std_dev"]
 
 
     print(f"Effective parameters for interval '{current_interval_str}': {effective_params}")
@@ -307,7 +300,7 @@ def check_alerts_for_query(es: Elasticsearch,
                         # Use fixed_interval for '15m', calendar_interval for '1d'
                         ("fixed_interval" if "m" in interval_str or "h" in interval_str else "calendar_interval"): interval_str,
                         "min_doc_count": 0,
-                        "time_zone": "Asia/Singapore"
+                        #"time_zone": "Asia/Singapore"
                     }
                 }
             }
@@ -328,7 +321,7 @@ def check_alerts_for_query(es: Elasticsearch,
 
         if not buckets:
             print("No data returned from Elasticsearch for the given query and time range.")
-            return 
+            return None, start_datetime_obj, end_datetime_obj
 
         data = []
         for bucket in buckets:
@@ -377,23 +370,4 @@ def check_alerts_for_query(es: Elasticsearch,
         print(f"An error occurred: {e}")
         import traceback
         traceback.print_exc()
-
-
-# if __name__ == "__main__":
-#     # # Example Usage (for testing the module directly)
-#     # es = Elasticsearch(ELASTICSEARCH_HOSTS)
-#     # if not es.ping():
-#     #     raise ValueError("Connection to Elasticsearch failed")
-
-
-#     # # Example user query (mimicking Streamlit input)
-#     # user_query_from_streamlit = {
-#     #     "query": {
-#     #         "query_string": {
-#     #             "query": "V2EnhancedThemes.V2Theme:(ARMEDCONFLICT OR TERROR)",
-#     #             "fields": ["V2EnhancedThemes.V2Theme"]
-#     #         }
-#     #     }
-#     # }
-
-#     check_alerts_for_query(es, user_query_from_streamlit)
+        return None, start_datetime_obj, end_datetime_obj
