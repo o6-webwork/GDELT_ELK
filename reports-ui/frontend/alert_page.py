@@ -430,8 +430,6 @@ def show_alert_page():
                               'custom_build_threshold']:
                     if st.session_state.current_custom_params.get(p_key) is not None:
                         payload[p_key] = st.session_state.current_custom_params[p_key]
-
-                st.write(payload)
                 
                 result = add_monitored_task_to_api(payload) # Pass the full payload
                 if result:
@@ -519,24 +517,24 @@ def show_alert_page():
                     st.write(f"Monitored since: {pd.to_datetime(task['created_at']).strftime('%Y-%m-%d %H:%M:%S %Z')}")
 
                     var_list = [['custom_baseline_window_pd_str', 'BASELINE_WINDOW'], 
-                                ['custom_build_window_periods_count', 'BUILD_WINDOW_PERIODS_COUNT']]
+                                ['custom_build_window_periods_count', 'BUILD_WINDOW_PERIODS_COUNT'],
+                                ['custom_min_periods_baseline', 'MIN_PERIODS_BASELINE']]
                     
                     # populate dictionary with either custom or default (if custom is None) parameters 
                     expander_detail = {}
                     for custom, default in var_list:
                         if task.get(custom) is None:
-                            expander_detail[default] = default_param.get('15m').get('BASELINE_WINDOW')
+                            expander_detail[default] = default_param.get('15m').get(default)
                         else:
                             expander_detail[default] = task.get(custom)
+
+
                     st.write(f"  - **Interval:** {task.get('interval_minutes')} minutes") #
-                    st.write(f"  - **Baseline Window:** {expander_detail.get('BASELINE_WINDOW')}") #
+                    st.write(f"  - **Baseline Window:** {expander_detail.get('BASELINE_WINDOW')} ({expander_detail.get('MIN_PERIODS_BASELINE')} periods minimally)") #
                     st.write(f"  - **Build Period:** {expander_detail.get('BUILD_WINDOW_PERIODS_COUNT')}") #
 
 
                     if latest_alert and latest_alert.get('alert_type'): #
-                        #st.markdown("**Latest Alert Details (from backend polling):**") #
-                        #st.write(f"  - **Alert ID:** {latest_alert.get('id', 'N/A')}") # Display alert_id
-                        # ... (display other latest_alert details as before) ...
                         count_val = latest_alert.get('count') #
                         if count_val is not None: st.write(f"  - **Count:** {count_val}") #
                         # ...
