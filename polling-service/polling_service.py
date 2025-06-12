@@ -47,7 +47,7 @@ def get_latest_bucket_end_time(reference_time: datetime.datetime, interval_minut
     # Converts the input datetime object into a Unix timestamp (the total number of seconds that have passed since the 1970 epoch).
     reference_timestamp = reference_time.timestamp()
 
-    # seconds that have passed since the start of the current bucket.
+    # seconds that have passed since the start of the current bucket.x
     remainder = reference_timestamp % interval_seconds
 
     current_bucket_start_ts = reference_timestamp - remainder
@@ -100,7 +100,8 @@ def process_single_task(db: Session, task: MonitoredTask):
                 interval_str=f"{interval_minutes}m",
                 task_custom_params=task_custom_params,
             )
-
+            
+            time_of_check = datetime.datetime.now(pytz.utc)
             if not alert_result:
                 print(f"Task ID {task.id}: No alert result structure returned for bucket check.")
 
@@ -120,13 +121,15 @@ def process_single_task(db: Session, task: MonitoredTask):
                 for key in drop_keys:
                     alert_result.pop(key, None)
 
-                new_alert = AlertHistory(task_id=task.id, alert_timestamp=db_alert_timestamp_utc, recorded_at=datetime.datetime.now(pytz.utc), **alert_result)
+                new_alert = AlertHistory(task_id=task.id, alert_timestamp=db_alert_timestamp_utc, recorded_at=time_of_check, **alert_result)
                 db.add(new_alert)
                 print(f"Saved alert to AlertHistory for task ID {task.id}")
             else:
                 print(f"No alert for task {task.id} in bucket ending at {end_datetime_for_check_sgt.isoformat()}.")
 
-            task.last_checked_at = latest_completed_bucket_end # This is a UTC datetime
+            # task.last_checked_at = latest_completed_bucket_end # This is a UTC datetime
+            task.last_checked_at = time_of_check # This is a UTC datetime
+
             db.commit()
             print(f"Task {task.id}: Updated last_checked_at to {latest_completed_bucket_end.isoformat()}")
 
