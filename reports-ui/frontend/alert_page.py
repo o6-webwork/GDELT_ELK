@@ -7,6 +7,7 @@ import datetime
 from streamlit_autorefresh import st_autorefresh
 import os
 import base64 
+import re
 
 BACKEND_URL = "http://reportsui_backend:8000" # backend URL
 
@@ -19,6 +20,24 @@ def fetch_param_sets_from_backend():
     except Exception as e:
         st.error(f"Failed to fetch PARAM_SETS from backend: {e}")
         return None
+    
+def is_valid_baseline_window_format(window_str: str) -> bool:
+    """
+    Validates if the baseline window string matches a format like '1d', '7d', '24h'.
+    Checks for one or more digits followed immediately by 'd' or 'h'.
+
+    """
+    if not isinstance(window_str, str) or not window_str:
+        return False # Must be a non-empty string
+
+    # Regex breakdown:
+    # ^     - asserts position at start of the string
+    # \d+   - matches one or more digits (0-9)
+    # [dh]  - matches a single character, either 'd' or 'h'
+    # $     - asserts position at the end of the string
+    pattern = re.compile(r"^\d+[dh]$")
+    
+    return pattern.match(window_str) is not None
 
 def acknowledge_alert_in_api(alert_id: int):
     """Acknowledges an alert via the backend API."""
@@ -372,9 +391,9 @@ def show_alert_page():
 
             # Popover for Custom Parameters
             with st.popover("🔧 Customize Alert Parameters (Optional)"):
-                st.markdown("**Override default parameters for this query:**")
-                # Store popover inputs temporarily in session state before form submission
-                
+                st.markdown("**Set custom parameters for this query:**")
+
+                # Store popover inputs temporarily in session state before form submission                
                 # These assignments directly update session state if the widgets change
                 st.session_state.current_custom_params['interval_minutes'] = st.number_input(
                     "Monitoring Interval (minutes):", 
@@ -422,21 +441,26 @@ def show_alert_page():
                     # Always send interval_minutes, defaulting to 15 if not customized
                     "interval_minutes": st.session_state.current_custom_params.get('interval_minutes', 15) 
                 }
+
                 # Add other custom parameters to payload if they have values
                 if st.session_state.current_custom_params.get('custom_baseline_window_pd_str',''): # Check for non-empty string
                     payload["custom_baseline_window_pd_str"] = st.session_state.current_custom_params['custom_baseline_window_pd_str']
+
                 for p_key in ['custom_min_periods_baseline', 'custom_min_count_for_alert', 
                               'custom_spike_threshold', 'custom_build_window_periods_count', 
                               'custom_build_threshold']:
                     if st.session_state.current_custom_params.get(p_key) is not None:
                         payload[p_key] = st.session_state.current_custom_params[p_key]
                 
-                result = add_monitored_task_to_api(payload) # Pass the full payload
-                if result:
-                    st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api()
-                    st.session_state.sound_played_for_alert_instance_id = None 
-                    st.session_state.current_custom_params = {} # Reset custom params after submission
-                    st.rerun() 
+
+                if not is_valid_baseline_window_format(payload["custom_baseline_window_pd_str"]):
+                    st.error(f"Invalid Format for Baseline Window: '{payload["custom_baseline_window_pd_str"]}'. Please use a format like '7d' for days or '24h' for hours.")
+                else:
+                    result = add_monitored_task_to_api(payload) # Pass the full payload
+                    if result:
+                        st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api()
+                        st.session_state.sound_played_for_alert_instance_id = None 
+                        st.rerun() 
             else:
                 st.warning("Please enter a query string to monitor.")
 
