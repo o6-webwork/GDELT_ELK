@@ -15,12 +15,23 @@ from contextlib import asynccontextmanager
 
 from data_loader import get_fields_from_elasticsearch, load_data_from_elasticsearch
 from alert_generation import check_alerts_for_query, get_interval_timedelta, PARAM_SETS
-from database import SessionLocal, engine, Base, MonitoredTask, AlertHistory, get_db, create_db_tables
+from database import SessionLocal, engine, Base, MonitoredTask, AlertHistory, Dashboard, get_db, create_db_tables
 
 ES_INDEX = "gkg"
 ES_HOST = "https://es01:9200"
 ES_USERNAME = "elastic"
 ES_PASSWORD = "changeme"
+
+class DashboardBase(BaseModel):
+    name: str
+
+class DashboardCreate(DashboardBase):
+    pass
+
+class DashboardResponse(DashboardBase):
+    id: int
+    class Config:
+        from_attributes = True
 
 class AlertAcknowledgeResponse(BaseModel):
     alert_id: int
@@ -42,7 +53,8 @@ class MonitoredTaskBase(BaseModel):
     custom_build_threshold: float | None = Field(default=None, ge=0, title="Custom Build Threshold (Ratio)")
     
 class MonitoredTaskCreate(MonitoredTaskBase): 
-    user_identifier: str | None = None # for user management; to eventually store user ID or username. optional for now
+    user_identifier: str | None = None 
+    dashboard_id: int
 
 class LatestAlertInfo(BaseModel):
     alert_id: int | None = Field(None, alias='id') 
@@ -394,6 +406,7 @@ async def create_monitoring_task(task_in: MonitoredTaskCreate, db: Session = Dep
 
 @app.get("/monitoring/tasks", response_model=list[MonitoredTaskResponse], tags=["Monitoring Tasks"])
 async def read_monitoring_tasks(
+    dashboard_id: int | None = Query(None),
     skip: int = Query(0, ge=0), 
     limit: int = Query(100, ge=1, le=200), 
     active_only: bool = Query(True), 
@@ -407,6 +420,9 @@ async def read_monitoring_tasks(
     query_obj = db.query(MonitoredTask)
     if active_only:
         query_obj = query_obj.filter(MonitoredTask.is_active == True)
+
+    if dashboard_id is not None:
+        query_obj = query_obj.filter(MonitoredTask.dashboard_id == dashboard_id)
 
     tasks_db = query_obj.order_by(MonitoredTask.created_at.desc()).offset(skip).limit(limit).all()
     
@@ -489,3 +505,51 @@ async def acknowledge_alert(alert_id: int, db: Session = Depends(get_db)):
 @app.get("/api/v1/config/alert_param_sets")
 async def get_alert_param_sets():
     return PARAM_SETS
+
+@app.post("/dashboards", response_model=DashboardResponse, status_code=201, tags=["Dashboards"])
+async def create_dashboard(dashboard_in: DashboardCreate, db: Session = Depends(get_db)):
+    # Check if dashboard with that name already exists
+    existing_dashboard = db.query(Dashboard).filter(Dashboard.name == dashboard_in.name).first()
+    if existing_dashboard:
+        raise HTTPException(status_code=400, detail="Dashboard with this name already exists.")
+    
+    db_dashboard = Dashboard(**dashboard_in.model_dump())
+    db.add(db_dashboard)
+    db.commit()
+    db.refresh(db_dashboard)
+    return db_dashboard
+
+@app.get("/dashboards", response_model=list[DashboardResponse], tags=["Dashboards"])
+async def read_dashboards(db: Session = Depends(get_db)):
+    dashboards = db.query(Dashboard).order_by(Dashboard.name).all()
+    return dashboards
+
+
+@app.delete("/dashboards/{dashboard_id}", status_code=204, tags=["Dashboards"])
+async def delete_dashboard(dashboard_id: int, db: Session = Depends(get_db)):
+    """
+    Deletes a dashboard, but only if it contains no monitored tasks.
+    """
+    # Step 1: Find the dashboard to be deleted.
+    dashboard_to_delete = db.query(Dashboard).filter(Dashboard.id == dashboard_id).first()
+    if not dashboard_to_delete:
+        raise HTTPException(status_code=404, detail="Dashboard not found")
+
+    # Step 2: Check if any tasks are still associated with this dashboard.
+    # This is the crucial safety check.
+    associated_tasks_count = db.query(MonitoredTask).filter(MonitoredTask.dashboard_id == dashboard_id, MonitoredTask.is_active == True).count()
+    
+    if associated_tasks_count > 0:
+        raise HTTPException(
+            status_code=400, # Bad Request
+            detail=f"Cannot delete dashboard '{dashboard_to_delete.name}'. It contains {associated_tasks_count} monitored queries. Please move or delete them first."
+        )
+
+    # Step 3: If no tasks are associated, proceed with deletion.
+    db.delete(dashboard_to_delete)
+    db.commit()
+    
+    print(f"Successfully deleted empty dashboard ID: {dashboard_id}, Name: '{dashboard_to_delete.name}'")
+    
+    # A 204 No Content response is standard for a successful DELETE, so no body is returned.
+    return

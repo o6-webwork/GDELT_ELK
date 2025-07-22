@@ -107,10 +107,13 @@ def play_alert_sound(sound_file_name="alert.mp3", audio_format="mpeg"): # Path r
 
 # --- Helper functions to interact with the backend for monitored tasks ---
 
-def fetch_monitored_tasks_from_api():
+def fetch_monitored_tasks_from_api(dashboard_id: int | None = None):
     """Fetches the list of active monitored tasks from the backend."""
+    api_url = f"{BACKEND_URL}/monitoring/tasks?active_only=true&limit=100"
+    if dashboard_id is not None:
+        api_url += f"&dashboard_id={dashboard_id}"
     try:
-        response = requests.get(f"{BACKEND_URL}/monitoring/tasks?active_only=true&limit=100")
+        response = requests.get(api_url)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -149,6 +152,42 @@ def stop_monitoring_task_in_api(task_id: int):
     except requests.exceptions.RequestException as e:
         st.error(f"Error stopping task: {e}")
         return None
+
+def create_dashboard_in_api(dashboard_name: str):
+    """Creates a new dashboard via the backend API."""
+    if not dashboard_name:
+        st.error("Dashboard name cannot be empty.")
+        return None
+    try:
+        payload = {"name": dashboard_name}
+        response = requests.post(f"{BACKEND_URL}/dashboards", json=payload)
+        if response.status_code == 201: # 201 Created
+            return response.json()
+        else:
+            error_detail = response.json().get('detail', 'Failed to create dashboard.')
+            st.error(f"Error creating dashboard: {error_detail}")
+            return None
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error connecting to backend to create dashboard: {e}")
+        return None
+    
+def delete_dashboard_in_api(dashboard_id: int):
+    """Deletes a dashboard via the backend API."""
+    if not dashboard_id:
+        st.error("Invalid Dashboard ID for deletion.")
+        return False
+    try:
+        response = requests.delete(f"{BACKEND_URL}/dashboards/{dashboard_id}")
+        if response.status_code == 204: # 204 No Content indicates success
+            st.success("Dashboard successfully deleted.")
+            return True
+        else:
+            error_detail = response.json().get('detail', 'Failed to delete dashboard.')
+            st.error(f"Error deleting dashboard: {error_detail}")
+            return False
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error connecting to backend to delete dashboard: {e}")
+        return False
 
 def perform_one_off_alert_check(user_query_dict, 
                                 date_mode_for_one_off, 
@@ -254,6 +293,12 @@ def show_alert_page():
     # For storing historical alert for graph display
     if 'current_graph_historical_alerts' not in st.session_state:
         st.session_state.current_graph_historical_alerts = []
+
+    # Track the selected dashboard
+    if 'selected_dashboard_id' not in st.session_state:
+        st.session_state.selected_dashboard_id = None
+    if 'confirm_delete_dashboard_id' not in st.session_state:
+        st.session_state.confirm_delete_dashboard_id = None
 
     # Callbacks to reset graph visibility
     def reset_graph():
@@ -369,17 +414,28 @@ def show_alert_page():
 
         # --- AUTO-REFRESH FOR THIS SECTION ---
         # Refresh every 60 seconds (for example) to get latest statuses from backend poller
-        # The backend polling service itself runs every 15 mins per task.
+        # The backend polling service itself runs every 60 seconds
         # This frontend refresh is just to update the display with what the backend has found.
-        refresh_interval_ms = 60 * 1000 # 60 seconds
+        refresh_interval_ms = 20 * 1000 # 20 seconds
         st_autorefresh(interval=refresh_interval_ms, key="persistent_monitoring_refresher")
         # When st_autorefresh triggers a rerun, it will call fetch_monitored_tasks_from_api() below.
 
+        try:
+            dashboards_response = requests.get(f"{BACKEND_URL}/dashboards")
+            dashboards = dashboards_response.json() if dashboards_response.status_code == 200 else []
+        except Exception as e:
+            st.error(f"Could not load dashboards: {e}")
+            dashboards = []
+
+        dashboard_names = {d['name']: d['id'] for d in dashboards}
+
         # Form for adding a new monitored query
         with st.form(key="add_new_monitoring_task_form"):
-            st.subheader("Add New Query")
+            st.subheader(f"Add New Query")
             
             col_query_input_live, col_submit_button_live = st.columns([4, 1])
+
+            popover_1, popover_2, blank_space = st.columns([1, 1, 4])
 
             with col_query_input_live:
                 new_query_to_monitor = st.text_input( #
@@ -390,98 +446,199 @@ def show_alert_page():
                 )
 
             # Popover for Custom Parameters
-            with st.popover("🔧 Customize Alert Parameters (Optional)"):
-                st.markdown("**Set custom parameters for this query:**")
+            with popover_1:
+                with st.popover("🔧 Customize Alert Parameters"):
+                        st.markdown("**Set custom parameters for this query:**")
 
-                # Store popover inputs temporarily in session state before form submission                
-                # These assignments directly update session state if the widgets change
-                st.session_state.current_custom_params['interval_minutes'] = st.number_input(
-                    "Monitoring Interval (minutes):", 
-                    min_value=1, value=st.session_state.current_custom_params.get('interval_minutes', 15), step=1,
-                    help="How often the backend should check this query. Default: 15 minutes.",
-                    key="popover_interval_minutes" # Add unique keys to popover widgets
-                )
-                st.session_state.current_custom_params['custom_baseline_window_pd_str'] = st.text_input(
-                    "Baseline Window (e.g., 1d, 7d):", 
-                    value=st.session_state.current_custom_params.get('custom_baseline_window_pd_str', '1d'),
-                    placeholder="Default: 1d",
-                    key="popover_baseline_window"
-                )
-                st.session_state.current_custom_params['custom_min_periods_baseline'] = st.number_input(
-                    "Min Periods for Baseline:", min_value=1, value=st.session_state.current_custom_params.get('custom_min_periods_baseline'), step=1, placeholder="Default: 12",
-                    key="popover_min_periods"
-                )
-                st.session_state.current_custom_params['custom_min_count_for_alert'] = st.number_input(
-                    "Min Count for Alert:", min_value=0, value=st.session_state.current_custom_params.get('custom_min_count_for_alert'), step=1, placeholder="Default: 1",
-                    key="popover_min_count"
-                )
-                st.markdown("###### Spike Detection (Z-Score):")
-                st.session_state.current_custom_params['custom_spike_threshold'] = st.number_input(
-                    "Spike Threshold (Z-score):", min_value=0.0, value=st.session_state.current_custom_params.get('custom_spike_threshold'), step=0.1, format="%.1f", placeholder="Default: 2.5",
-                    key="popover_spike_thresh"
-                )
-                st.markdown("###### Build Detection:")
-                st.session_state.current_custom_params['custom_build_window_periods_count'] = st.number_input(
-                    "Build Window (No. of Intervals):", min_value=1, value=st.session_state.current_custom_params.get('custom_build_window_periods_count'), step=1, placeholder="Default: 8",
-                    key="popover_build_window"
-                )
-                st.session_state.current_custom_params['custom_build_threshold'] = st.number_input(
-                    "Build Threshold (Ratio):", min_value=0.0, value=st.session_state.current_custom_params.get('custom_build_threshold'), step=0.1, format="%.1f", placeholder="Default: 2.2",
-                    key="popover_build_thresh"
-                )
+                        # Store popover inputs temporarily in session state before form submission                
+                        # These assignments directly update session state if the widgets change
+                        st.session_state.current_custom_params['interval_minutes'] = st.number_input(
+                            "Monitoring Interval (minutes):", 
+                            min_value=1, value=st.session_state.current_custom_params.get('interval_minutes', 15), step=1,
+                            help="How often the backend should check this query. Default: 15 minutes.",
+                            key="popover_interval_minutes" # Add unique keys to popover widgets
+                        )
+                        st.session_state.current_custom_params['custom_baseline_window_pd_str'] = st.text_input(
+                            "Baseline Window (e.g., 1d, 7d):", 
+                            value=st.session_state.current_custom_params.get('custom_baseline_window_pd_str', '1d'),
+                            placeholder="Default: 1d",
+                            key="popover_baseline_window"
+                        )
+                        st.session_state.current_custom_params['custom_min_periods_baseline'] = st.number_input(
+                            "Min Periods for Baseline:", min_value=1, value=st.session_state.current_custom_params.get('custom_min_periods_baseline'), step=1, placeholder="Default: 12",
+                            key="popover_min_periods"
+                        )
+                        st.session_state.current_custom_params['custom_min_count_for_alert'] = st.number_input(
+                            "Min Count for Alert:", min_value=0, value=st.session_state.current_custom_params.get('custom_min_count_for_alert'), step=1, placeholder="Default: 1",
+                            key="popover_min_count"
+                        )
+                        st.markdown("###### Spike Detection (Z-Score):")
+                        st.session_state.current_custom_params['custom_spike_threshold'] = st.number_input(
+                            "Spike Threshold (Z-score):", min_value=0.0, value=st.session_state.current_custom_params.get('custom_spike_threshold'), step=0.1, format="%.1f", placeholder="Default: 2.5",
+                            key="popover_spike_thresh"
+                        )
+                        st.markdown("###### Build Detection:")
+                        st.session_state.current_custom_params['custom_build_window_periods_count'] = st.number_input(
+                            "Build Window (No. of Intervals):", min_value=1, value=st.session_state.current_custom_params.get('custom_build_window_periods_count'), step=1, placeholder="Default: 8",
+                            key="popover_build_window"
+                        )
+                        st.session_state.current_custom_params['custom_build_threshold'] = st.number_input(
+                            "Build Threshold (Ratio):", min_value=0.0, value=st.session_state.current_custom_params.get('custom_build_threshold'), step=0.1, format="%.1f", placeholder="Default: 2.2",
+                            key="popover_build_thresh"
+                        )
+
+            with popover_2:
+                with st.popover("📂 Assign to Dashboard"):
+                    st.markdown("Choose the dashboard to save the query to")
+                    # Let user choose an existing dashboard
+                    st.session_state.save_to_existing_dashboard_name = st.selectbox(
+                        "Choose existing dashboard:",
+                        options=list(dashboard_names.keys()),
+                        index=None,
+                        key="new_task_dashboard_select"
+                    )
+                
+                    # Or create a new one
+                    st.session_state.save_to_new_dashboard_name = st.text_input(
+                        "Or create new dashboard:", 
+                        key="new_dashboard_name_text_input",
+                        placeholder="New dashboard name",
+                    )
 
             # Form submit button
             with col_submit_button_live:
                 submitted_new_task_form = st.form_submit_button("Start Monitoring", type="primary")
 
+        st.markdown("---")
+        
+        # Add a special option to show all queries regardless of dashboard
+        dashboard_options = list(dashboard_names.keys()) + ["All Monitored Queries"]
+
+        col1, col2, col3, col4_blank = st.columns([2,1,1,3])
+
+        # Find the name of the dashboard that should be selected
+        selected_name_from_state = dashboard_names.get(st.session_state.selected_dashboard_id, "All Monitored Queries")
+        try:
+            # Find the index of that name in our options list
+            current_index = dashboard_options.index(selected_name_from_state)
+        except ValueError:
+            current_index = 0 # Default to "All" if not found
+
+        with col1: 
+            selected_dashboard_name = st.selectbox(
+                "Select Dashboard to Monitor:",
+                options=dashboard_options,
+                index=current_index, # Default to "All",
+                label_visibility="collapsed",
+            )
+
+        if selected_dashboard_name == "All Monitored Queries":
+            st.session_state.selected_dashboard_id = None
+        else:
+            st.session_state.selected_dashboard_id = dashboard_names[selected_dashboard_name]
+
+        st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api(dashboard_id=st.session_state.selected_dashboard_id)
+        # Now, use the CURRENT selection to determine the button's state and session state
+        delete_button_disabled = (selected_dashboard_name == "All Monitored Queries" or len(st.session_state.monitored_tasks_list) > 0)
+
+        with col3: 
+            if st.button("🗑️ Delete Dashboard", disabled=delete_button_disabled, use_container_width=True, type="primary", help="You can only delete an empty dashboard."):
+                if st.session_state.selected_dashboard_id:
+                    # Set state to show confirmation message on next rerun
+                    st.session_state.confirm_delete_dashboard_id = st.session_state.selected_dashboard_id
+                    st.rerun()
+
+        with col2:
+            if st.button("Refresh Monitored Tasks List", key="refresh_monitored_list_button"):
+                st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api()
+                st.session_state.sound_played_for_alert_instance_id = None # Reset sound flag as we are getting fresh statuses
+                st.session_state.sounded_persistent_alert_ids.clear() # Clear the set
+                st.session_state.show_alert_graph = False #
+                st.rerun()
+
+        # --- Deletion Confirmation Logic ---
+        if st.session_state.confirm_delete_dashboard_id:
+            dashboard_to_delete_id = st.session_state.confirm_delete_dashboard_id
+            dashboard_to_delete_name = next((name for name, id in dashboard_names.items() if id == dashboard_to_delete_id), "this dashboard")
+
+            st.warning(f"**Are you sure you want to delete the '{dashboard_to_delete_name}' dashboard?** This action cannot be undone. The dashboard must be empty of all monitored queries before it can be deleted.")
+            
+            confirm_col1, confirm_col2, _ = st.columns([1, 1, 4])
+            with confirm_col1:
+                if st.button("✅ Yes, Delete It", key="confirm_delete_yes", use_container_width=True):
+                    success = delete_dashboard_in_api(dashboard_to_delete_id)
+                    st.write(success)
+                    st.session_state.confirm_delete_dashboard_id = None # Clear confirmation state
+                    if success:
+                        st.session_state.selected_dashboard_id = None # Reset selection to "All"
+                    st.rerun()
+            
+            with confirm_col2:
+                if st.button("❌ Cancel", key="confirm_delete_no", use_container_width=True):
+                    st.session_state.confirm_delete_dashboard_id = None # Clear confirmation state
+                    st.rerun()
+
         if submitted_new_task_form:
             if new_query_to_monitor:
-                payload = {
-                    "query_string": new_query_to_monitor,
-                    # Always send interval_minutes, defaulting to 15 if not customized
-                    "interval_minutes": st.session_state.current_custom_params.get('interval_minutes', 15) 
-                }
 
-                # Add other custom parameters to payload if they have values
-                if st.session_state.current_custom_params.get('custom_baseline_window_pd_str',''): # Check for non-empty string
-                    payload["custom_baseline_window_pd_str"] = st.session_state.current_custom_params['custom_baseline_window_pd_str']
-
-                for p_key in ['custom_min_periods_baseline', 'custom_min_count_for_alert', 
-                              'custom_spike_threshold', 'custom_build_window_periods_count', 
-                              'custom_build_threshold']:
-                    if st.session_state.current_custom_params.get(p_key) is not None:
-                        payload[p_key] = st.session_state.current_custom_params[p_key]
+                dashboard_id_for_task = None
                 
-
-                if not is_valid_baseline_window_format(payload["custom_baseline_window_pd_str"]):
-                    st.error(f"Invalid Format for Baseline Window: '{payload["custom_baseline_window_pd_str"]}'. Please use a format like '7d' for days or '24h' for hours.")
+                # Prioritize creating a new dashboard if text is entered
+                new_dashboard_name = st.session_state.get('save_to_new_dashboard_name', '').strip()
+                if new_dashboard_name:
+                    print(f"Attempting to create new dashboard: '{new_dashboard_name}'")
+                    new_dashboard_response = create_dashboard_in_api(new_dashboard_name)
+                    if new_dashboard_response:
+                        dashboard_id_for_task = new_dashboard_response.get('id')
                 else:
-                    result = add_monitored_task_to_api(payload) # Pass the full payload
-                    if result:
-                        st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api()
-                        st.session_state.sound_played_for_alert_instance_id = None 
-                        st.rerun() 
+                    # If no new name, use the selected dashboard from the dropdown
+                    selected_name = st.session_state.get('save_to_existing_dashboard_name')
+                    if selected_name and selected_name in dashboard_names:
+                        dashboard_id_for_task = dashboard_names[selected_name]
+                    else:
+                        st.error("Please select a valid dashboard or create a new one.")
+
+                if dashboard_id_for_task:
+                    payload = {
+                        "query_string": new_query_to_monitor,
+                        "dashboard_id": dashboard_id_for_task,
+                        # Always send interval_minutes, defaulting to 15 if not customized
+                        "interval_minutes": st.session_state.current_custom_params.get('interval_minutes', 15) 
+                    }
+
+                    # Add other custom parameters to payload if they have values
+                    if st.session_state.current_custom_params.get('custom_baseline_window_pd_str',''): # Check for non-empty string
+                        payload["custom_baseline_window_pd_str"] = st.session_state.current_custom_params['custom_baseline_window_pd_str']
+
+                    for p_key in ['custom_min_periods_baseline', 'custom_min_count_for_alert', 
+                                'custom_spike_threshold', 'custom_build_window_periods_count', 
+                                'custom_build_threshold']:
+                        if st.session_state.current_custom_params.get(p_key) is not None:
+                            payload[p_key] = st.session_state.current_custom_params[p_key]
+                    
+
+                    if not is_valid_baseline_window_format(payload["custom_baseline_window_pd_str"]):
+                        st.error(f"Invalid Format for Baseline Window: '{payload["custom_baseline_window_pd_str"]}'. Please use a format like '7d' for days or '24h' for hours.")
+                    else:
+                        result = add_monitored_task_to_api(payload) # Pass the full payload
+                        if result:
+                            st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api(dashboard_id=st.session_state.selected_dashboard_id)
+                            st.session_state.sound_played_for_alert_instance_id = None 
+                            st.session_state.selected_dashboard_id = dashboard_id_for_task
+                            st.rerun() 
             else:
                 st.warning("Please enter a query string to monitor.")
-
-        st.markdown("---")
-        if st.button("Refresh Monitored Tasks List & Statuses", key="refresh_monitored_list_button"):
-            st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api()
-            st.session_state.sound_played_for_alert_instance_id = None # Reset sound flag as we are getting fresh statuses
-            st.session_state.sounded_persistent_alert_ids.clear() # Clear the set
-            st.session_state.show_alert_graph = False #
-            st.rerun()
 
         # --- Fetch tasks on each rerun when in this mode (due to autorefresh) ---
         # This ensures the list is up-to-date when st_autorefresh causes a rerun.
         # We only fetch if the list is not already populated by a button click in this same run.
         # A more sophisticated approach might check timestamps if performance becomes an issue.
-        st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api()
+        st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api(dashboard_id=st.session_state.selected_dashboard_id)
 
         if not st.session_state.monitored_tasks_list:
             st.caption("No queries are currently being persistently monitored.")
         else:
-            st.markdown(f"**Currently Monitoring {len(st.session_state.monitored_tasks_list)} Queries:**")
+            st.markdown(f"**Currently Monitoring {len(st.session_state.monitored_tasks_list)} Queries from `{selected_dashboard_name}`:**")
             
             for i, task in enumerate(st.session_state.monitored_tasks_list):
                 task_id = task['id']
@@ -571,7 +728,7 @@ def show_alert_page():
                                     ack_result = acknowledge_alert_in_api(latest_alert.get('id'))
                                     if ack_result:
                                         # Refresh list to show updated acknowledgment status
-                                        st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api()
+                                        st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api(dashboard_id=st.session_state.selected_dashboard_id)
                                         st.session_state.sound_played_for_alert_instance_id = None # Allow sound for next new alert
                                         st.rerun()
                             else:
@@ -607,7 +764,7 @@ def show_alert_page():
                         with col_stop_mon:
                              if st.button("🚫 Stop Monitoring", key=f"stop_monitoring_{task_id}", type="secondary", use_container_width=True): #
                                 stop_monitoring_task_in_api(task_id) #
-                                st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api() #
+                                st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api(dashboard_id=st.session_state.selected_dashboard_id) #
                                 st.rerun() 
 
                     else: # Case where latest_alert or alert_type is None (no active alert to acknowledge/graph)
@@ -615,7 +772,7 @@ def show_alert_page():
                         # Still show stop monitoring if no alert
                         if st.button("Stop Monitoring", key=f"stop_monitoring_no_alert_{task_id}", type="secondary"): # Renamed key for uniqueness
                             stop_monitoring_task_in_api(task_id) #
-                            st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api() #
+                            st.session_state.monitored_tasks_list = fetch_monitored_tasks_from_api(dashboard_id=st.session_state.selected_dashboard_id) #
                             st.rerun() #
 
     # For graph display

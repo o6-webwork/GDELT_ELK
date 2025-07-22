@@ -1,8 +1,8 @@
 import os
 import datetime
 import pytz # For timezone-aware datetimes
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float, PrimaryKeyConstraint
+from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from sqlalchemy.sql import func # For server-side default timestamps if needed
 
 # Get DATABASE_URL from environment variable set by Docker Compose
@@ -18,13 +18,26 @@ Base = declarative_base()
 
 # --- SQLAlchemy Models ---
 
+class Dashboard(Base):
+    __tablename__ = "dashboards"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    # You could add other fields later, like description or user_id
+
+    tasks = relationship(
+        "MonitoredTask", 
+        back_populates="dashboard", 
+        cascade="all, delete-orphan"
+    )
+
 class MonitoredTask(Base):
     __tablename__ = "monitored_tasks"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    dashboard_id = Column(Integer, ForeignKey("dashboards.id"), nullable=False, index=True)
+    dashboard = relationship("Dashboard", back_populates="tasks")
     query_string = Column(String, index=True, nullable=False)
     interval_minutes = Column(Integer, default=15, nullable=False)
-    # Store datetimes in UTC in the database for consistency
     last_checked_at = Column(DateTime(timezone=True), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(pytz.utc), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
@@ -52,10 +65,13 @@ class AlertHistory(Base):
     __tablename__ = "alert_history"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    #id = Column(Integer, primary_key=True)
     task_id = Column(Integer, ForeignKey("monitored_tasks.id"), nullable=False, index=True)
     # Store datetimes in UTC
     alert_timestamp = Column(DateTime(timezone=True), nullable=False) # Timestamp from the alert_info (event time)
     recorded_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(pytz.utc), nullable=False) # When this record was created
+    #recorded_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(pytz.utc), nullable=False, primary_key=True) # When this record was created
+
     
     alert_type = Column(String, nullable=True)
     reason = Column(Text, nullable=True)
@@ -77,6 +93,17 @@ class AlertHistory(Base):
     # timeseries_snapshot = Column(JSONB, nullable=True) # If using PostgreSQL JSONB type
 
     is_acknowledged = Column(Boolean, default=False, nullable=False)
+
+    # Add a relationship to MonitoredTask to enable cascades from task to alert history
+    task = relationship("MonitoredTask", backref="alerts")
+
+    # --- UNCOMMENT --- 
+    # __table_args__ = (
+    #     PrimaryKeyConstraint('id', 'recorded_at'), # Explicitly define the composite primary key
+    #     {
+    #         'postgresql_partition_by': 'RANGE (recorded_at)',
+    #     }
+    # )
 
     def __repr__(self):
         return f"<AlertHistory(id={self.id}, task_id={self.task_id}, type='{self.alert_type}')>"
