@@ -2,6 +2,7 @@
 logstash/logstash_ingest_data/json/*
 logstash/csv
 logstash/logs
+*.pyc
 
 # Ignore Env var
 .env

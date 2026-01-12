@@ -1,10 +1,11 @@
 {
-    "index_patterns" : ["gkg*"],
+    "index_patterns" : ["gkg-*"],
     "priority" : 1,
     "template": {
     	"settings" : {
     		"number_of_shards" : 1,
-    		"number_of_replicas" : 1
+    		"number_of_replicas" : 1,
+            "index.lifecycle.name": "gdelt_14d_retention_policy"
     	},
     	"mappings": {
     		"properties": {
@@ -12,6 +13,9 @@
                     "type" : "geo_point"
     			}
     		}
-    	}
+    	},
+        "aliases": {
+            "gkg_search": {}
+        }
     }
 }

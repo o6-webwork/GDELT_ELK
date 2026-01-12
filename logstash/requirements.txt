@@ -5,3 +5,5 @@ py4j==0.10.9.7
 pyspark==3.5.5
 requests==2.32.3
 urllib3==2.3.0
+elasticsearch
+python-dotenv==1.2.0
