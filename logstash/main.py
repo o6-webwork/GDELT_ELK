@@ -17,6 +17,27 @@ from time import sleep
 from typing import List
 
 # Constants
+from time import sleep
+import sys
+from pyspark.sql.functions import col, struct, array_distinct
+import json
+from pyspark.sql import SparkSession
+from schemas.gkg_schema import gkg_schema
+from etl.parse_gkg import gkg_parser
+from pyspark.sql.functions import concat_ws
+from pyspark.sql import functions as F
+import glob
+import shutil
+import time
+from elasticsearch import Elasticsearch
+from dotenv import load_dotenv
+
+sys.setrecursionlimit(10000)
+
+################################################## Constants ##################################################
+load_dotenv()
+USER = "elastic"
+PASSWORD = os.getenv("ELASTIC_PASSWORD")
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
 DOWNLOAD_FOLDER = "./csv"
 LOG_FILE = "./logs/log.txt"
@@ -93,6 +114,28 @@ def get_latest_gdelt_links() -> List[str]:
         List[str]: Links to CSV files for download.
     """
     response = run_web_query(LAST_UPDATE_URL)
+################################################## Functions ##################################################
+def write(content: str) -> None:
+    """
+    Write log data into log file.
+
+    Args:
+        content (str): Log details to be recorded into the file.
+    """
+    with open(LOG_FILE, "a") as f:
+        f.write(content + "\n")
+
+def get_latest_gdelt_links() -> list[str]:
+    """
+    Fetches the latest update file and extracts the download URLs.
+
+    Returns:
+        list[str]: The list of URLs fetched from the last updated text file in GDELT.
+    """
+    response = requests.get(LAST_UPDATE_URL)
+    if response.status_code != 200:
+        write("Failed to fetch lastupdate.txt")
+        return []
     lines = response.text.strip().split("\n")
     urls = [line.split()[-1] for line in lines if line.endswith(".zip")]
     return urls
@@ -109,6 +152,26 @@ def download_and_extract(url: str) -> None:
         url (str): URL to fetch CSV file data from.
     """
     response = run_web_query(url)
+def download_and_extract(url: str, out: list[str]) -> list[str]:
+    """
+    Downloads a ZIP file from the given URL and extracts CSV files.
+    Checks against the list in the parameter to avoid repeat extraction,
+    & adds processed CSV files to the list after operations.
+
+    Args:
+        url (str): The URL to download the zip file from.
+        out (list[str]): The list of GKG CSV files that have already been extracted.
+
+    Returns:
+        list[str]: The updated list of GKG CSV files that have already been processed.
+    """
+    file_name = url.split("/")[-1]
+    response = requests.get(url, stream=True)
+    
+    if response.status_code != 200:
+        write(f"Failed to get {url}")
+        return []
+    
     zip_file = zipfile.ZipFile(BytesIO(response.content))
     for file in zip_file.namelist():
         if file not in os.listdir(DOWNLOAD_FOLDER):
@@ -163,10 +226,17 @@ def run_pipeline(raw_file: str, json_output: str) -> None:
     """
     spark = SparkSession.builder.appName("Standalone GKG ETL").getOrCreate()
     rdd = spark.sparkContext.textFile(raw_file)    
+    creates a Spark DataFrame with the defined schema, and writes the output as a single
+    Parquet file and a single JSON file.
+
+    Args:
+        raw_file (str): The full file path to the GKG CSV file to be processed.
+        json_output (str): The JSON file output path.
+    """
+    spark = SparkSession.builder.appName("Standalone GKG ETL").getOrCreate()
+    rdd = spark.sparkContext.textFile(raw_file)
     parsed_rdd = rdd.map(lambda line: gkg_parser(line))
     df = spark.createDataFrame(parsed_rdd, schema=gkg_schema)
-
-    # Concatenate GkgRecordId.Date and GkgRecordId.NumberInBatch with "-"
     df_transformed = df.withColumn(
         "RecordId",
         concat_ws("-", col("GkgRecordId.Date").cast("string"), col("GkgRecordId.NumberInBatch").cast("string"))
@@ -192,6 +262,102 @@ def run_pipeline(raw_file: str, json_output: str) -> None:
     
     V2GCAM_fields = ["DictionaryDimId"]
     V21AllNames_fields = ["Name"]
+    df_transformed = df_transformed.drop("V1Counts") 
+    df_transformed = df_transformed.drop("V1Locations")
+    df_transformed = df_transformed.drop("V1Orgs")
+    df_transformed = df_transformed.drop("V1Persons")
+    df_transformed = df_transformed.drop("V1Themes")
+    df_transformed = df_transformed.drop("V21Amounts")
+    df_transformed = df_transformed.drop("V21Counts")
+    df_transformed = df_transformed.drop("V21EnhancedDates")
+
+
+    df_transformed = df_transformed.withColumn(
+        "V15Tone",
+        struct(
+            col("V15Tone.Tone"),
+            col("V15Tone.PositiveScore"),
+            col("V15Tone.NegativeScore"),
+            col("V15Tone.Polarity"),
+            col("V15Tone.ActivityRefDensity"),
+            col("V15Tone.SelfGroupRefDensity")
+        )
+    )
+
+    df_transformed = df_transformed.withColumn(
+        "V21Quotations",
+        struct(
+            col("V21Quotations.Verb"),
+            col("V21Quotations.Quote")
+        )
+    )
+
+    df_transformed = df_transformed.withColumn(
+        "V2Persons",
+        struct(
+            col("V2Persons.V1Person")
+        )
+    )
+
+    df_transformed = df_transformed.withColumn(
+        "V2Orgs",
+        struct(
+            col("V2Orgs.V1Org")
+        )
+    )
+
+    df_transformed = df_transformed.withColumn(
+        "V2Locations",
+        struct(
+            col("V2Locations.FullName"),
+            col("V2Locations.CountryCode"),
+            col("V2Locations.ADM1Code"),
+            col("V2Locations.ADM2Code"),
+            col("V2Locations.LocationLatitude"),
+            col("V2Locations.LocationLongitude"),
+            col("V2Locations.FeatureId")
+        )
+    )
+
+    df_transformed = df_transformed.withColumn(
+        "V2EnhancedThemes",
+        struct(
+            col("V2EnhancedThemes.V2Theme")
+        )
+    )
+    
+    df_transformed = df_transformed.withColumn(
+        "V2Locations",
+        struct(
+            array_distinct(col("V2Locations.FullName")).alias("FullName"),
+            array_distinct(col("V2Locations.CountryCode")).alias("CountryCode"),
+            array_distinct(col("V2Locations.ADM1Code")).alias("ADM1Code"),
+            array_distinct(col("V2Locations.ADM2Code")).alias("ADM2Code"),
+            array_distinct(col("V2Locations.LocationLatitude")).alias("LocationLatitude"),
+            array_distinct(col("V2Locations.LocationLongitude")).alias("LocationLongitude"),
+            array_distinct(col("V2Locations.FeatureId")).alias("FeatureId")
+        )
+    )
+    df_transformed = df_transformed.withColumn(
+        "V2Persons",
+        struct(
+            array_distinct(col("V2Persons.V1Person")).alias("V1Person"),
+        )
+    )
+
+    df_transformed = df_transformed.withColumn(
+        "V2EnhancedThemes",
+        struct(
+            array_distinct(col("V2EnhancedThemes.V2Theme")).alias("V2Theme"),
+        )
+    )
+
+    df_transformed = df_transformed.withColumn(
+        "V2Orgs",
+        struct(
+            array_distinct(col("V2Orgs.V1Org")).alias("V1Org"),
+        )
+    )
 
     # Remove duplicates
     df_transformed = restructure_array_struct_column(df_transformed, "V2Locations", V2Locations_fields)
@@ -206,6 +372,9 @@ def run_pipeline(raw_file: str, json_output: str) -> None:
     column_names = ["V21ShareImg", "V21SocImage", "V2DocId", "V21RelImg", "V21Date"]
     for col_name in column_names:
         df_transformed = df_transformed.withColumn(col_name, col(f"{col_name}.{col_name}"))
+
+    # Add datatype field for dynamic indexing in Logstash
+    df_transformed = df_transformed.withColumn("datatype", F.lit("gkg"))
 
     # Reduce to a single partition so that we get one output file.
     df_transformed.coalesce(1).write.mode("overwrite").json(json_output)
@@ -247,6 +416,22 @@ def es_client_setup() -> Elasticsearch:
         ca_certs="./certs/ca/ca.crt",
         request_timeout=30
     )
+    cp_json_to_ingest(os.path.join(json_output, new_file_name))
+    spark.stop()
+
+def process_downloaded_files(out: list[str]) -> None:
+    """
+    Iterates through the folder path containing newly downloaded CSVs,
+    & processes each file's contents to be ingested via Logstash.
+
+    Args:
+        out (list[str]): The list of CSV files that have been processed thus far.
+    """
+    logstash_path = "./logstash_ingest_data/json"
+    os.makedirs(logstash_path, exist_ok=True)
+    src_path = "./csv/"
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
 
 def es_check_data(timestamp_str: str) -> bool:
     '''
@@ -341,6 +526,93 @@ def delete_processed_json():
     and deletes JSON files already ingested into Elasticsearch.
     '''
     directory="./logstash_ingest_data/json"
+            json_output_path = raw_file_path.replace(".csv", ".json")
+            
+            write(f"Processing file: {raw_file_path}")
+            run_pipeline(raw_file_path, json_output_path)
+
+def cp_json_to_ingest(file_path: str) -> None:
+    """
+    Copies processed JSON files over to the ingestion folder to be fed into Elasticsearch.
+
+    Args:
+        file_path (str): The full file path to the file to be checked & copied.
+    """
+    logstash_path = "./logstash_ingest_data/json"
+    os.makedirs(logstash_path, exist_ok=True)    
+    if os.path.isfile(file_path) and file_path.endswith(".json"):
+        target_path = os.path.join(logstash_path, os.path.basename(file_path))
+        shutil.copy(file_path, target_path)
+        print(f"Copied {file_path} to {target_path}")
+    else:
+        print(f"Invalid file: {file_path} (Not a .json file or file doesn't exist)")
+
+        
+def connect_to_es(user, password) -> Elasticsearch:
+    """
+    Establish a connection to the Elasticsearch cluster with timeout and retry logic.
+
+    Returns:
+        Elasticsearch: The connected Elasticsearch client.
+    """
+    return Elasticsearch(
+        ["http://localhost:9200"],
+        http_auth=(user, password),
+        request_timeout=30,
+        max_retries=5,
+        retry_on_timeout=True
+    )
+
+
+def setup_elasticsearch(user: str, password: str, policy_name: str, policy_file: str, template_name: str, template_file: str) -> None:
+    """
+    Connects to Elasticsearch to set up the ILM policy and index template.
+
+    Args:
+        user (str): The username for Elasticsearch.
+        password (str): The password for Elasticsearch.
+        policy_name (str): The name for the ILM policy.
+        policy_file (str): The file path to the ILM policy JSON file.
+        template_name (str): The name for the index template.
+        template_file (str): The file path to the index template JSON file.
+    """
+    try:
+        es = connect_to_es(user, password)
+        
+        # 1. Setup ILM Policy
+        with open(policy_file, "r") as f:
+            policy_body = json.load(f)
+        es.ilm.put_lifecycle(name=policy_name, body=policy_body)
+        write(f"Successfully created or updated ILM policy: {policy_name}")
+
+        # 2. Setup Index Template
+        with open(template_file, "r") as f:
+            template_body = json.load(f)
+        es.indices.put_index_template(name=template_name, body=template_body)
+        write(f"Successfully created or updated index template: {template_name}")
+
+    except Exception as e:
+        write(f"Error setting up Elasticsearch: {e}")
+        # Optionally re-raise the exception if it should stop the script
+        # raise e
+    
+
+##################################################### Main ####################################################
+if __name__ == "__main__":
+    out = []
+
+    if PASSWORD is None:
+        raise Exception("Error: password cannot be null!")
+
+    # Setup Elasticsearch ILM and Index Template
+    setup_elasticsearch(
+        user=USER,
+        password=PASSWORD,
+        policy_name="gdelt_14d_retention_policy",
+        policy_file="./logstash/ilm_policy.json",
+        template_name="gkg_template",
+        template_file="./logstash/template.json"
+    )
 
     while True:
         sleep(10)
