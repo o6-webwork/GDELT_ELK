@@ -226,13 +226,6 @@ def run_pipeline(raw_file: str, json_output: str) -> None:
     """
     spark = SparkSession.builder.appName("Standalone GKG ETL").getOrCreate()
     rdd = spark.sparkContext.textFile(raw_file)    
-    creates a Spark DataFrame with the defined schema, and writes the output as a single
-    Parquet file and a single JSON file.
-
-    Args:
-        raw_file (str): The full file path to the GKG CSV file to be processed.
-        json_output (str): The JSON file output path.
-    """
     spark = SparkSession.builder.appName("Standalone GKG ETL").getOrCreate()
     rdd = spark.sparkContext.textFile(raw_file)
     parsed_rdd = rdd.map(lambda line: gkg_parser(line))
@@ -402,6 +395,7 @@ def move_json_to_ingest(file_path: str) -> None:
     shutil.move(file_path, target_path)
     write_all(f"Copied {file_path} to {target_path}", [LOG_FILE, JSON_LOG_FILE])
 
+
 def es_client_setup() -> Elasticsearch:
     '''
     Sets up client to connect to Elasticsearch.
@@ -416,8 +410,7 @@ def es_client_setup() -> Elasticsearch:
         ca_certs="./certs/ca/ca.crt",
         request_timeout=30
     )
-    cp_json_to_ingest(os.path.join(json_output, new_file_name))
-    spark.stop()
+
 
 def process_downloaded_files(out: list[str]) -> None:
     """
@@ -526,10 +519,10 @@ def delete_processed_json():
     and deletes JSON files already ingested into Elasticsearch.
     '''
     directory="./logstash_ingest_data/json"
-            json_output_path = raw_file_path.replace(".csv", ".json")
-            
-            write(f"Processing file: {raw_file_path}")
-            run_pipeline(raw_file_path, json_output_path)
+    json_output_path = raw_file_path.replace(".csv", ".json")
+    
+    write(f"Processing file: {raw_file_path}")
+    run_pipeline(raw_file_path, json_output_path)
 
 def cp_json_to_ingest(file_path: str) -> None:
     """
