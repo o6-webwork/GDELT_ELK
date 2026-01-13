@@ -6,4 +6,8 @@ logstash/logs
 
 # Ignore Env var
 .env
+*/__pycache__
+/.vscode
 
+venv/
+.venv

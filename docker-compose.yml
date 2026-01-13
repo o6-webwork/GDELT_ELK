@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 volumes:
   certs:
@@ -7,7 +7,11 @@ volumes:
     driver: local
   kibanadata:
     driver: local
-  logstashdata01:
+  logstash01:
+    driver: local
+  logdata:
+    driver: local
+  csvfiles:
     driver: local
 
 networks:
@@ -71,7 +75,6 @@ services:
       retries: 120
     networks:
       - elastic
-
   es01:
     depends_on:
       setup:
@@ -100,6 +103,7 @@ services:
       - xpack.security.transport.ssl.certificate=certs/es01/es01.crt
       - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
       - xpack.security.transport.ssl.verification_mode=certificate
+      - ES_JAVA_OPTS=-Xms3g -Xmx3g
     mem_limit: ${ES_MEM_LIMIT}
     ulimits:
       memlock:
@@ -139,6 +143,7 @@ services:
       - XPACK_SECURITY_ENCRYPTIONKEY=${ENCRYPTION_KEY}
       - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${ENCRYPTION_KEY}
       - XPACK_REPORTING_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+      - KB_JAVA_OPTS=-Xms3g -Xmx3g
     mem_limit: ${KB_MEM_LIMIT}
     healthcheck:
       test:
@@ -153,6 +158,19 @@ services:
       - elastic
     restart: always
 
+  scraper:
+    build: ./logstash
+    volumes:
+      - logstash01:/app/logstash_ingest_data/json
+      - logdata:/app/logs
+      - csvfiles:/app/csv
+      - certs:/app/certs
+    depends_on:
+      es01:
+        condition: service_healthy
+    networks:
+      - elastic
+
   logstash01:
     depends_on:
       es01:
@@ -165,18 +183,47 @@ services:
     user: root
     volumes:
       - certs:/usr/share/logstash/certs
-      - logstashdata01:/usr/share/logstash/data
-      - "${LOGSTASH_ROOT}/logstash_ingest_data/json/:/usr/share/logstash/data/"
+      - "logstash01:/usr/share/logstash/data/"
       - "${LOGSTASH_ROOT}/pipeline/:/usr/share/logstash/pipeline/"
-      - "${LOGSTASH_ROOT}/logstash.yml:/usr/share/logstash/config/logstash.yml" 
+      - "${LOGSTASH_ROOT}/logstash.yml:/usr/share/logstash/config/logstash.yml"
       - "${LOGSTASH_ROOT}/template.json:/usr/share/logstash/template.json"
-
+    mem_limit: ${LS_MEM_LIMIT}
     environment:
       - xpack.monitoring.enabled=false
       - ELASTIC_USER=elastic
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-      - ELASTIC_HOSTS=https://es01:9200
-      - LS_JAVA_OPTS=-Xms2g -Xmx2g
-    restart: "no"  # Ensures Logstash does not restart after exiting
     networks:
       - elastic
+
+  pipeline-monitoring:
+    depends_on:
+      es01:
+        condition: service_healthy
+    build: ./pipeline-monitoring
+    volumes:
+      - logdata:/app/logs
+      - csvfiles:/app/csv
+      - logstash01:/app/logstash_ingest_data/json
+      - certs:/app/certs
+    ports:
+      - ${PIPELINE_MONITORING_PORT}:7979
+    networks:
+      - elastic
+
+  reportsui_backend:
+    build: ./reports-ui/backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      es01:
+        condition: service_healthy
+    networks:
+      - elastic
+
+  reportsui_frontend:
+    build: ./reports-ui/frontend
+    ports:
+      - "8501:8501"
+    networks:
+      - elastic
+

@@ -1,0 +1,8 @@
+python-multipart
+jinja2
+Werkzeug==2.2.2
+requests==2.26.0
+pytz
+elasticsearch==8.18.0
+fastapi==0.95.1
+uvicorn==0.22.0

@@ -19,9 +19,14 @@ Before you begin, ensure you have the following installed:
 
 Docker mounts the logstash/logstash_ingest_data/json volume, allowing the logstash container to read it for ingestion.
 
+To run the app, go to port 5601 on the local machine.
+
 ## Troubleshooting
 ### Empty Fields in Kibana
 Delete the sincedb.txt in logstash/logstash_ingest_data 
 
 ### Authentication Error
 Change credentials in BOTH `.env` and `/pipeline/logstash.conf`. These credentials must be identical to authenticate to Elastic.
+
+## Pipeline diagram:
+![alt text](GDELT_250325.drawio.png)

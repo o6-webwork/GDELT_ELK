@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GDELT Pipeline Dashboard</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Inter font from rsms -->
+  <link rel="preconnect" href="https://rsms.me/">
+  <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+  <!-- jQuery for AJAX calls -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    /* Custom scrollbar for log panels */
+    .log-panel::-webkit-scrollbar { width: 8px; }
+    .log-panel::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+    .log-panel::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+    .log-panel::-webkit-scrollbar-thumb:hover { background: #555; }
+    /* Basic status dot styling */
+    .status-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      display: inline-block; vertical-align: middle;
+    }
+
+    body {
+        {% if view_mode=="dark" %}
+          background-color: black;
+          color: white;
+        {% else %}
+          background-color: white;
+          color: black;
+        {% endif %}
+    }
+
+    .light-dark-box {
+        {% if view_mode=="dark" %}
+          background-color: rgb(33, 33, 33);
+        {% else %}
+          background-color: lightgray;
+        {% endif %}
+
+    .padding {
+      padding: 5vw;
+    }
+      
+    }
+  </style>
+</head>
+<body class="font-sans">
+  <div class="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
+    <div class="flex items-center justify-between padding mb-4">
+      <h1 class="text-3xl font-bold">GDELT Pipeline Dashboard</h1>
+      <a href="/setcolor">
+        <button type="button" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded whitespace-nowrap">
+            Toggle {{ alt_view_mode }} mode
+        </button>
+      </a>
+  </div>
+  
+    <!-- Top Panels Section: 2 x 2 Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <!-- Extract Phase Panel -->
+    <div class="p-4 rounded-lg shadow light-dark-box">
+      <h2 class="text-lg font-semibold mb-2 flex items-center">
+        Extract Phase
+        <span id="extractIndicator" class="status-dot bg-gray-400 ml-2"></span>
+      </h2>
+      <p class="text-xs mt-1">Scraping GDELT files</p>
+      <p class="text-xs mt-2">Next scrape in: <span id="remainingExtract" class="font-medium">Loading...</span></p>
+    </div>
+    <!-- Transform Phase Panel -->
+    <div class="p-4 rounded-lg shadow light-dark-box">
+      <h2 class="text-lg font-semibold mb-2  flex items-center">
+        Transform Phase
+        <span id="transformIndicator" class="status-dot bg-gray-400 ml-2"></span>
+      </h2>
+      <p class="text-xs  mt-1">Processing files with PySpark</p>
+    </div>
+    <!-- Load Phase Panel -->
+    <div class=" p-4 rounded-lg shadow light-dark-box">
+      <h2 class="text-lg font-semibold mb-2  flex items-center">
+        Load Phase
+        <span id="loadIndicator" class="status-dot bg-gray-400 ml-2"></span>
+      </h2>
+      <p class="text-xs  mt-1">Ingesting JSON via Logstash</p>
+    </div>
+    <!-- File Counts Panel -->
+    <div class=" p-6 rounded-lg shadow light-dark-box">
+      <h2 class="text-xl font-semibold mb-4 ">File Counts</h2>
+      <div class="text-sm ">
+        <p>CSV Files: <span id="csvCount">0</span></p>
+        <p>JSON Files: <span id="jsonCount">0</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logs Panels Section: 2 x 1 Grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+    <!-- Scraping Logs Panel -->
+    <div class=" p-6 rounded-lg shadow light-dark-box">
+      <h2 class="text-xl font-semibold mb-4 ">Scraping Logs</h2>
+      <pre id="scrapingLogsPanel" class="log-panel  p-4 rounded-md border border-gray-200 h-40 overflow-y-scroll text-xs font-mono"></pre>
+    </div>
+    <!-- Ingestion Logs Panel -->
+    <div class=" p-6 rounded-lg shadow light-dark-box">
+      <h2 class="text-xl font-semibold mb-4 ">Ingestion Logs</h2>
+      <pre id="ingestionLogsPanel" class="log-panel  p-4 rounded-md border border-gray-200 h-40 overflow-y-scroll text-xs font-mono"></pre>
+    </div>
+  </div>
+
+    
+
+      <!-- Manual Patching Section -->
+  <div class="light-dark-box p-6 rounded-lg shadow mb-6">
+    <h2 class="text-xl font-semibold mb-4  flex items-center">
+      <span>Patch Files</span>
+      <span id="patchTitleIndicator" class="ml-2 status-dot bg-gray-400"></span>
+    </h2>
+    <form id="patchForm" class="flex flex-col sm:flex-row sm:items-end gap-4">
+      <div class="flex-grow">
+        <label for="lookBackDays" class="block text-sm font-medium  mb-1">Look Back Period (days):</label>
+        <input style="color: black" id="lookBackDays" name="look_back_days" class="w-full px-3 py-2 border border-gray-300 rounded-md" value="1" min="1">
+      </div>
+      <button type="submit" id="startPatchBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded whitespace-nowrap">Start Patching</button>
+    </form>
+    <div id="patchTaskStatus" class="mt-4 text-sm  min-h-[4em]"></div>
+    <!-- New flex container for progress bar and Cancel button -->
+    <div id="patchProgressWrapper" class="mt-2 hidden flex items-center gap-4">
+      <progress id="patchProgressBar" max="100" value="0" class="w-full"></progress>
+      <!-- In the Patch Files section, add a new button for full stop and cleanup -->
+      <div id="patchControlButtons" class="flex gap-4 mt-2">
+        <button id="cancelPatchBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs">Cancel</button>
+        <button id="stopAndDeletePatchBtn" class="bg-red-700 hover:bg-red-800 text-white font-bold py-1 px-2 rounded text-xs">Stop & Delete Files</button>
+      </div>
+    </div>
+  </div>
+
+      <!-- Targeted Archival Section -->
+  <div class="light-dark-box p-6 rounded-lg shadow mb-6">
+    <h2 class="text-xl font-semibold mb-4  flex items-center">
+      <span>Targeted Archival Extraction</span>
+      <span id="archiveTitleIndicator" class="ml-2 status-dot bg-gray-400"></span>
+    </h2>
+    <form id="archiveForm" class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+      <div>
+        <label for="startDate" class="block text-sm font-medium  mb-1">Start Date:</label>
+        <input style="color: black" type="date" id="startDate" name="start_date" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+      </div>
+      <div>
+        <label for="endDate" class="block text-sm font-medium  mb-1">End Date:</label>
+        <input style="color: black" type="date" id="endDate" name="end_date" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+      </div>
+      <button type="submit" id="startArchiveBtn" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded whitespace-nowrap">Download Archive</button>
+    </form>
+    <div id="archiveTaskStatus" class="mt-4 text-sm  min-h-[4em]"></div>
+    <!-- New flex container for archive progress bar and Cancel button -->
+    <div id="archiveProgressWrapper" class="mt-2 hidden flex items-center gap-4">
+      <progress id="archiveProgressBar" max="100" value="0" class="w-full"></progress>
+      <!-- In the Patch Files section, add a new button for full stop and cleanup -->
+      <div id="archiveControlButtons" class="flex gap-4 mt-2">
+        <button id="cancelArchiveBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-xs">Cancel</button>
+        <button id="stopAndDeleteArchiveBtn" class="bg-red-700 hover:bg-red-800 text-white font-bold py-1 px-2 rounded text-xs">Stop & Delete Files</button>
+      </div>
+    </div>
+  </div>
+
+    <!-- Main Process Logs -->
+    <div class="p-6 rounded-lg shadow mb-6 light-dark-box">
+      <h2 class="text-xl font-semibold mb-4 ">Main Process Logs</h2>
+      <pre id="logPanel" class="log-panel p-4 rounded-md border border-gray-200 h-96 overflow-y-scroll text-xs font-mono"></pre>
+    </div>
+  </div>
+
+  <!-- JavaScript: Polling, Form Submission, and Task Cancellation -->
+  <script>
+    // Poll remaining time for extract phase every second
+    function updateRemainingExtract() {
+      $.getJSON('/remaining')
+        .done(data => $('#remainingExtract').text(data.remaining || "Loading..."))
+        .fail(() => $('#remainingExtract').text('Error'));
+    }
+    setInterval(updateRemainingExtract, 1000);
+    updateRemainingExtract();
+
+    // Poll pipeline status for extract, transform, and load phases every second
+    function updatePipelineStatus() {
+      $.getJSON('/status')
+        .done(data => {
+          // Extract Phase
+          if (data.extract === 'running') {
+            $('#extractIndicator').removeClass().addClass('status-dot bg-green-500 ml-2');
+          } else if (data.extract === 'error') {
+            $('#extractIndicator').removeClass().addClass('status-dot bg-red-500 ml-2');
+          } else {
+            $('#extractIndicator').removeClass().addClass('status-dot bg-gray-400 ml-2');
+          }
+          // Transform Phase
+          if (data.transform === 'running') {
+            $('#transformIndicator').removeClass().addClass('status-dot bg-green-500 ml-2');
+          } else if (data.transform === 'error') {
+            $('#transformIndicator').removeClass().addClass('status-dot bg-red-500 ml-2');
+          } else {
+            $('#transformIndicator').removeClass().addClass('status-dot bg-gray-400 ml-2');
+          }
+          // Load Phase
+          if (data.load === 'running') {
+            $('#loadIndicator').removeClass().addClass('status-dot bg-green-500 ml-2');
+          } else if (data.load === 'error') {
+            $('#loadIndicator').removeClass().addClass('status-dot bg-red-500 ml-2');
+          } else {
+            $('#loadIndicator').removeClass().addClass('status-dot bg-gray-400 ml-2');
+          }
+        })
+        .fail(() => {
+          $('#extractIndicator, #transformIndicator, #loadIndicator').removeClass().addClass('status-dot bg-red-500 ml-2');
+        });
+    }
+    setInterval(updatePipelineStatus, 1000);
+    updatePipelineStatus();
+
+    // Poll main logs every 2 seconds
+    function updateLogs() {
+      $.getJSON('/logs')
+        .done(data => {
+          if (data && data.lines && Array.isArray(data.lines)) {
+            $('#logPanel').text(data.lines.join("\n"));
+          } else {
+            $('#logPanel').text("No logs available");
+          }
+        })
+        .fail(() => $('#logPanel').text('Error loading logs.'));
+    }
+    setInterval(updateLogs, 2000);
+    updateLogs();
+
+    // Function to update scraping logs every 2 seconds
+    function updateScrapingLogs() {
+      $.getJSON('/scraping_logs')
+        .done(function(data) {
+          if (data && data.lines && Array.isArray(data.lines)) {
+            $('#scrapingLogsPanel').text(data.lines.join("\n"));
+          } else {
+            $('#scrapingLogsPanel').text("No scraping logs available");
+          }
+        })
+        .fail(function() {
+          $('#scrapingLogsPanel').text("Error loading scraping logs");
+        });
+    }
+    setInterval(updateScrapingLogs, 2000);
+    updateScrapingLogs();
+
+    // Function to update ingestion logs every 2 seconds
+    function updateIngestionLogs() {
+      $.getJSON('/ingestion_logs')
+        .done(function(data) {
+          if (data && data.lines && Array.isArray(data.lines)) {
+            $('#ingestionLogsPanel').text(data.lines.join("\n"));
+          } else {
+            $('#ingestionLogsPanel').text("No ingestion logs available");
+          }
+        })
+        .fail(function() {
+          $('#ingestionLogsPanel').text("Error loading ingestion logs");
+        });
+    }
+    setInterval(updateIngestionLogs, 2000);
+    updateIngestionLogs();
+
+
+    // Function to update the file counts panel every 2 seconds
+    function updateFileCounts() {
+      $.getJSON('/file_counts')
+        .done(function(data) {
+          $('#csvCount').text(data.csv_count);
+          $('#jsonCount').text(data.json_count);
+        })
+        .fail(function() {
+          $('#csvCount').text("Error");
+          $('#jsonCount').text("Error");
+        });
+    }
+    setInterval(updateFileCounts, 2000);
+    updateFileCounts();
+
+
+    // --- Progress polling for Patch Task ---
+    let patchInterval = null;
+    function startPatchProgressPolling() {
+      patchInterval = setInterval(function() {
+        $.getJSON('/patch_progress')
+          .done(function(data) {
+            $('#patchProgressBar').attr('value', data.percent);
+            $('#patchTaskStatus').text(data.message);
+            if(data.percent >= 100 || data.message.toLowerCase().includes("cancelled")) {
+              clearInterval(patchInterval);
+              $('#startPatchBtn').prop('disabled', false);
+              $('#cancelPatchBtn').addClass('hidden');
+              $('#patchProgressContainer').addClass('hidden');
+              $('#stopAndDeletePatchBtn').addClass('hidden');
+            }
+          })
+          .fail(function() {
+            $('#patchTaskStatus').text('Error fetching patch progress.');
+          });
+      }, 2000);
+    }
+
+    // --- Progress polling for Archive Task ---
+    let archiveInterval = null;
+    function startArchiveProgressPolling() {
+      archiveInterval = setInterval(function() {
+        $.getJSON('/archive_progress')
+          .done(function(data) {
+            $('#archiveProgressBar').attr('value', data.percent);
+            $('#archiveTaskStatus').text(data.message);
+            if(data.percent >= 100 || data.message.toLowerCase().includes("cancelled")) {
+              clearInterval(archiveInterval);
+              $('#startArchiveBtn').prop('disabled', false);
+              $('#cancelArchiveBtn').addClass('hidden');
+              $('#archiveProgressContainer').addClass('hidden');
+              $('#stopAndDeleteArchiveBtn').addClass('hidden');
+            }
+          })
+          .fail(function() {
+            $('#archiveTaskStatus').text('Error fetching archive progress.');
+          });
+      }, 2000);
+    }
+
+    // Manual Patching Form submission
+    $('#patchForm').submit(function(e) {
+      e.preventDefault();
+      var formData = $(this).serialize();
+      $('#startPatchBtn').prop('disabled', true);
+      $('#cancelPatchBtn').removeClass('hidden');
+      $('#patchProgressWrapper').removeClass('hidden');
+      $('#stopAndDeletePatchBtn').removeClass('hidden');
+      $.post('/patching', formData)
+        .done(function(response) {
+          startPatchProgressPolling();
+        })
+        .fail(function() {
+          alert('Failed to start patching task.');
+          $('#startPatchBtn').prop('disabled', false);
+        });
+    });
+
+    // Archive Download Form submission
+    $('#archiveForm').submit(function(e) {
+      e.preventDefault();
+      var formData = $(this).serialize();
+      $('#startArchiveBtn').prop('disabled', true);
+      $('#cancelArchiveBtn').removeClass('hidden');
+      $('#archiveProgressWrapper').removeClass('hidden');
+      $('#stopAndDeleteArchiveBtn').removeClass('hidden');
+      $.post('/archive', formData)
+        .done(function(response) {
+          startArchiveProgressPolling();
+        })
+        .fail(function() {
+          alert('Failed to start archive download task.');
+          $('#startArchiveBtn').prop('disabled', false);
+        });
+    });
+
+    // Cancel Patch Task
+    $('#cancelPatchBtn').click(function() {
+      $.post('/patch_cancel')
+        .done(function(response) {
+          $('#patchTaskStatus').text(response.message);
+        })
+        .fail(function() {
+          alert('Failed to cancel patch task.');
+        });
+    });
+
+    // Cancel Archive Task
+    $('#cancelArchiveBtn').click(function() {
+      $.post('/archive_cancel')
+        .done(function(response) {
+          $('#archiveTaskStatus').text(response.message);
+        })
+        .fail(function() {
+          alert('Failed to cancel archive task.');
+        });
+    });
+
+    //"Stop & Delete Files" button (patching)
+    $('#stopAndDeletePatchBtn').click(function() {
+      $.post('/patch_stop_delete')
+        .done(function(response) {
+          $('#patchTaskStatus').text(response.message);
+        })
+        .fail(function() {
+          alert('Failed to stop and delete patch files.');
+        });
+    });
+
+    //"Stop & Delete Files" button (archival)
+    $('#stopAndDeleteArchiveBtn').click(function() {
+      $.post('/archive_stop_delete')
+        .done(function(response) {
+          $('#archiveTaskStatus').text(response.message);
+        })
+        .fail(function() {
+          alert('Failed to stop and delete archive files.');
+        });
+    });
+
+  </script>
+</body>
+</html>
