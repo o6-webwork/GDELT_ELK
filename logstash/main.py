@@ -3,22 +3,21 @@ import requests
 import zipfile
 from io import BytesIO
 from time import sleep
-from pathlib import Path
 import sys
-import os
 from pyspark.sql.functions import col, struct, array_distinct
 import json
 from pyspark.sql import SparkSession
 from schemas.gkg_schema import gkg_schema
 from etl.parse_gkg import gkg_parser
-from pyspark.sql.functions import col, concat_ws
-from pyspark.sql.window import Window
+from pyspark.sql.functions import concat_ws
 from pyspark.sql import functions as F
 import glob
 import shutil
 import time
 from elasticsearch import Elasticsearch
 from dotenv import load_dotenv
+
+sys.setrecursionlimit(10000)
 
 ################################################## Constants ##################################################
 load_dotenv()
