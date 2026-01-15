@@ -6,36 +6,29 @@ import requests
 import shutil
 import threading
 import zipfile
-from elasticsearch import Elasticsearch
-from etl.parse_gkg import gkg_parser
+from elasticsearch import Elasticsearch, NotFoundError
 from io import BytesIO
-from pyspark.sql.functions import col, struct, array_distinct
-from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import col, concat_ws
-from schemas.gkg_schema import gkg_schema
 from time import sleep
 from typing import List
-
-# Constants
-from time import sleep
 import sys
-from pyspark.sql.functions import col, struct, array_distinct
 import json
-from pyspark.sql import SparkSession
-from schemas.gkg_schema import gkg_schema
-from etl.parse_gkg import gkg_parser
-from pyspark.sql.functions import concat_ws
-from pyspark.sql import functions as F
-import glob
-import shutil
-import time
-from elasticsearch import Elasticsearch
 from dotenv import load_dotenv
 
+# PySpark imports
+from pyspark.sql.functions import col, struct, array_distinct, concat_ws
+from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql import functions as F
+
+# Local imports
+from schemas.gkg_schema import gkg_schema
+from etl.parse_gkg import gkg_parser
+
+
 sys.setrecursionlimit(10000)
+load_dotenv()
+
 
 ################################################## Constants ##################################################
-load_dotenv()
 USER = "elastic"
 PASSWORD = os.getenv("ELASTIC_PASSWORD")
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
@@ -48,17 +41,17 @@ JSON_LOG_FILE = "./logs/json_log.txt"
 LOGSTASH_PATH = "./logstash_ingest_data/json"
 PYSPARK_LOG_FILE = "./logs/pyspark_log.txt"
 
-# Initialises subfolders for volume data storage
+
+################################################ DIR handling #################################################
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs("./logs", exist_ok=True)
 os.makedirs(LOGSTASH_PATH, exist_ok=True)
-
-# Cleans the logs / create non-existent log files
 for file in [LOG_FILE, SCRAPING_LOG_FILE, INGESTION_LOG_FILE, TIMESTAMP_LOG_FILE, JSON_LOG_FILE, PYSPARK_LOG_FILE]:
     with open(file, "w") as f:
         f.write("")
 
-################################################# Functions for code #################################################
+
+################################################## Functions ##################################################
 def write(message: str, file: str) -> None:
     '''
     Writes message to the file in the specified file path.
@@ -75,6 +68,7 @@ def write(message: str, file: str) -> None:
     with open(file, "a", encoding="utf-8") as f:
         f.write(current_time + message + "\n")
 
+
 def write_all(message: str, file_list: list[str] = [LOG_FILE, INGESTION_LOG_FILE, JSON_LOG_FILE]) -> None:
     '''
     Writes the message to all files in file_list,
@@ -84,7 +78,9 @@ def write_all(message: str, file_list: list[str] = [LOG_FILE, INGESTION_LOG_FILE
         message (str): String to append to end of log file.
         file_list (List[str], optional): List of file paths to write message into. 
     '''
-    for FILE in file_list: write(message, FILE)
+    for file in file_list:
+        write(message, file)
+
 
 def run_web_query(url: str) -> requests.Response:
     '''
@@ -105,25 +101,6 @@ def run_web_query(url: str) -> requests.Response:
         return run_web_query(url)
     return response
 
-def get_latest_gdelt_links() -> List[str]:
-    """
-    Fetches the latest update file (updated every 15 min) from GDELT,
-    and returns all the links from which to download the CSV zip files.
-
-    Returns:
-        List[str]: Links to CSV files for download.
-    """
-    response = run_web_query(LAST_UPDATE_URL)
-################################################## Functions ##################################################
-def write(content: str) -> None:
-    """
-    Write log data into log file.
-
-    Args:
-        content (str): Log details to be recorded into the file.
-    """
-    with open(LOG_FILE, "a") as f:
-        f.write(content + "\n")
 
 def get_latest_gdelt_links() -> list[str]:
     """
@@ -133,53 +110,48 @@ def get_latest_gdelt_links() -> list[str]:
         list[str]: The list of URLs fetched from the last updated text file in GDELT.
     """
     response = requests.get(LAST_UPDATE_URL)
+
     if response.status_code != 200:
-        write("Failed to fetch lastupdate.txt")
+        write(message="Failed to fetch lastupdate.txt.", file=SCRAPING_LOG_FILE)
         return []
+
     lines = response.text.strip().split("\n")
     urls = [line.split()[-1] for line in lines if line.endswith(".zip")]
     return urls
 
+
 def download_and_extract(url: str) -> None:
     """
-    Downloads a ZIP file from the given URL,
-    and extracts the CSV files into the DOWNLOAD_FOLDER directory.
-    Checks if the CSV files are in DOWNLOAD_FOLDER before downloading,
-    and only looks for GKG CSV files.
-    Repeat CSV files are logged and skipped.
-
-    Args:
-        url (str): URL to fetch CSV file data from.
-    """
-    response = run_web_query(url)
-def download_and_extract(url: str, out: list[str]) -> list[str]:
-    """
     Downloads a ZIP file from the given URL and extracts CSV files.
-    Checks against the list in the parameter to avoid repeat extraction,
-    & adds processed CSV files to the list after operations.
+    Checks against existing files to avoid repeat extraction.
 
     Args:
         url (str): The URL to download the zip file from.
-        out (list[str]): The list of GKG CSV files that have already been extracted.
-
-    Returns:
-        list[str]: The updated list of GKG CSV files that have already been processed.
     """
     file_name = url.split("/")[-1]
+    if any(f in os.listdir(DOWNLOAD_FOLDER) for f in [file_name.replace(".zip", "")]):
+         write_all(f"Extraction skipped: {file_name} (or contents) already exists.", [LOG_FILE, SCRAPING_LOG_FILE])
+         return
+
     response = requests.get(url, stream=True)
     
     if response.status_code != 200:
-        write(f"Failed to get {url}")
-        return []
+        write(f"Failed to get {url}", SCRAPING_LOG_FILE)
+        return
     
-    zip_file = zipfile.ZipFile(BytesIO(response.content))
-    for file in zip_file.namelist():
-        if file not in os.listdir(DOWNLOAD_FOLDER):
-            if file.lower().endswith("gkg.csv"):
-                write_all(f"Extracting latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
-                zip_file.extract(file, DOWNLOAD_FOLDER)
-                write_all(f"Extracted latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
-        else: write_all(f"Extraction skipped: {file} already exists.", [LOG_FILE, SCRAPING_LOG_FILE])
+    try:
+        zip_file = zipfile.ZipFile(BytesIO(response.content))
+        for file in zip_file.namelist():
+            if file not in os.listdir(DOWNLOAD_FOLDER):
+                if file.lower().endswith("gkg.csv"):
+                    write_all(f"Extracting latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
+                    zip_file.extract(file, DOWNLOAD_FOLDER)
+                    write_all(f"Extracted latest file (15 min interval): {file}", [LOG_FILE, SCRAPING_LOG_FILE])
+            else: 
+                write_all(f"Extraction skipped: {file} already exists.", [LOG_FILE, SCRAPING_LOG_FILE])
+    except zipfile.BadZipFile:
+        write(f"Error: Bad Zip File for {url}", SCRAPING_LOG_FILE)
+
 
 def restructure_columns(df: DataFrame, column_name: str, fields: List[str]) -> DataFrame:
     '''
@@ -226,8 +198,6 @@ def run_pipeline(raw_file: str, json_output: str) -> None:
     """
     spark = SparkSession.builder.appName("Standalone GKG ETL").getOrCreate()
     rdd = spark.sparkContext.textFile(raw_file)    
-    spark = SparkSession.builder.appName("Standalone GKG ETL").getOrCreate()
-    rdd = spark.sparkContext.textFile(raw_file)
     parsed_rdd = rdd.map(lambda line: gkg_parser(line))
     df = spark.createDataFrame(parsed_rdd, schema=gkg_schema)
     df_transformed = df.withColumn(
@@ -405,26 +375,12 @@ def es_client_setup() -> Elasticsearch:
     '''
     return Elasticsearch(
         "https://es01:9200",
-        basic_auth=("elastic", "changeme"),
+        basic_auth=("elastic", PASSWORD),
         verify_certs=True,
         ca_certs="./certs/ca/ca.crt",
         request_timeout=30
     )
 
-
-def process_downloaded_files(out: list[str]) -> None:
-    """
-    Iterates through the folder path containing newly downloaded CSVs,
-    & processes each file's contents to be ingested via Logstash.
-
-    Args:
-        out (list[str]): The list of CSV files that have been processed thus far.
-    """
-    logstash_path = "./logstash_ingest_data/json"
-    os.makedirs(logstash_path, exist_ok=True)
-    src_path = "./csv/"
-    if src_path not in sys.path:
-        sys.path.insert(0, src_path)
 
 def es_check_data(timestamp_str: str) -> bool:
     '''
@@ -441,88 +397,109 @@ def es_check_data(timestamp_str: str) -> bool:
     response = client.count(index='gkg*', body=query_body, request_timeout=10)
     return response.get('count', 0) > 0
 
-################################################# Threading functions #################################################
+
 def process_downloaded_files() -> None:
     '''
     Infinite looping function that process downloaded CSV files via PySpark dataframe,
     converts them into JSON format, and finally deletes the relevant files / folders.
     '''
-    # Source directory for CSV files
-    src_path = "./csv"
+    src_path = DOWNLOAD_FOLDER
     
     while True:
-        files = os.listdir(src_path)
-        if files == []: continue
-        file = files[0]
-        if file.endswith(".csv"):
-            # Build the full path to the file
+        try:
+            files = os.listdir(src_path)
+            csv_files = [f for f in files if f.endswith(".csv")]
+            
+            if not csv_files: 
+                sleep(5)
+                continue
+                
+            file = csv_files[0]
             raw_file_path = os.path.join(src_path, file)
-            # Create the JSON output path by replacing .csv with .json
             json_output_path = raw_file_path.replace(".csv", ".json")
             
-            # Checks for presence of ingestion files
             json_file_name = file.replace(".gkg.csv", ".json")
             timestamp_str = json_file_name.split(".")[0]
+            
             if es_check_data(timestamp_str):
-                write_all(f"Transformation skipped: {json_file_name} already exists")
-
-                # Removes the already processed file
-                os.remove(raw_file_path)
-                write_all(f"Deleted processed CSV file: {raw_file_path}", [LOG_FILE, JSON_LOG_FILE])
-
-                # Cleaning the corresponding JSON folder (if present)
-                json_folder = file.split(".")[0] + ".gkg.json"
-                json_folder_full = os.path.join(src_path, json_folder)
-                if os.path.exists(json_folder_full):
-                    try:
-                        shutil.rmtree(json_folder_full)
-                        write_all(f"Deleted processed Spark folder: {json_folder}", [LOG_FILE, JSON_LOG_FILE])
-                    except Exception as e:
-                        write_all(f"Error deleting Spark folder {json_folder}: {e}", [LOG_FILE, JSON_LOG_FILE])
-
+                write_all(f"Transformation skipped: {json_file_name} already exists inside Elasticsearch")
+                if os.path.exists(raw_file_path):
+                    os.remove(raw_file_path)
                 continue
             
-            if not os.path.exists(raw_file_path):
-                write_all(f"File not present in folder, skipping transformation: {file}", [LOG_FILE, JSON_LOG_FILE])
-                continue
-
-            with open(PYSPARK_LOG_FILE, "w") as f: f.write(timestamp_str)
+            with open(PYSPARK_LOG_FILE, "w") as f:
+                f.write(timestamp_str)
+            
             write_all(f"Transforming file into JSON: {file}")
             try:
                 run_pipeline(raw_file_path, json_output_path)
-                
-            except:
-                write_all(f"File not present in folder, skipping transformation: {file}", [LOG_FILE, JSON_LOG_FILE])
-            
-            # Remove the CSV file using its full path
-            write_all(f"Transformed file into JSON: {file}")
-            with open(PYSPARK_LOG_FILE, "w") as f: f.write("")
+            except Exception as e:
+                write_all(f"Error during pipeline execution for {file}: {e}", [LOG_FILE, JSON_LOG_FILE])
+
+                with open(PYSPARK_LOG_FILE, "w") as f:
+                    f.write("")
+                continue
+
+            with open(PYSPARK_LOG_FILE, "w") as f:
+                f.write("")
+
             sleep(1)
+            
             if os.path.exists(raw_file_path):
                 os.remove(raw_file_path)
-            write_all(f"Deleted processed CSV file: {raw_file_path}", [LOG_FILE, JSON_LOG_FILE])
+                write_all(f"Deleted processed CSV file: {raw_file_path}", [LOG_FILE, JSON_LOG_FILE])
 
-            # Cleaning the corresponding JSON folder
             json_folder = file.split(".")[0] + ".gkg.json"
             json_folder_full = os.path.join(src_path, json_folder)
-            try:
-                shutil.rmtree(json_folder_full)
-                write_all(f"Deleted processed Spark folder: {json_folder}", [LOG_FILE, JSON_LOG_FILE])
-            except Exception as e:
-                write_all(f"Error deleting Spark folder {json_folder}: {e}", [LOG_FILE, JSON_LOG_FILE])
 
-            write_all(f"Loading JSON file into Elasticsearch: {json_file_name}", [LOG_FILE, JSON_LOG_FILE])
+            if os.path.exists(json_folder_full):
+                try:
+                    shutil.rmtree(json_folder_full)
+                except Exception as e:
+                    write_all(f"Error deleting Spark folder {json_folder}: {e}", [LOG_FILE, JSON_LOG_FILE])
 
-def delete_processed_json():
+        except Exception as e:
+            write_all(f"Critical error in process loop: {e}", [LOG_FILE])
+            sleep(10)
+
+
+def delete_processed_json() -> None:
     '''
-    Checks JSON folder constantly,
-    and deletes JSON files already ingested into Elasticsearch.
+    Checks JSON folder constantly, & deletes JSON files already ingested into Elasticsearch.
     '''
-    directory="./logstash_ingest_data/json"
-    json_output_path = raw_file_path.replace(".csv", ".json")
+    directory = LOGSTASH_PATH
     
-    write(f"Processing file: {raw_file_path}")
-    run_pipeline(raw_file_path, json_output_path)
+    while True:
+        sleep(10)
+        try:
+            all_json = [i for i in os.listdir(directory) if ".json" in i]
+            for filename in all_json:
+                # Check if this specific timestamp exists in ES
+                if es_check_data(filename.split(".")[0]):
+                    file_path = os.path.join(directory, filename)
+
+                    # Stop deletion if Spark is currently writing this specific timestamp
+                    # (Prevents race condition where ES sees old data but Spark is writing new data)
+                    try:
+                        with open(PYSPARK_LOG_FILE, "r") as f:
+                            timestamp = f.read().strip()
+
+                        if timestamp and timestamp in file_path:
+                            continue
+
+                    except FileNotFoundError:
+                        pass
+
+                    try:
+                        os.remove(file_path)
+                        write_all(f"Cleaned up ingested JSON file: {filename}", [LOG_FILE, JSON_LOG_FILE])
+
+                    except OSError as e:
+                        write_all(f"Error deleting {filename}: {e}", [LOG_FILE])
+
+        except Exception as e:
+            write_all(f"Error in delete thread: {e}", [LOG_FILE])
+
 
 def cp_json_to_ingest(file_path: str) -> None:
     """
@@ -541,88 +518,54 @@ def cp_json_to_ingest(file_path: str) -> None:
         print(f"Invalid file: {file_path} (Not a .json file or file doesn't exist)")
 
         
-def connect_to_es(user, password) -> Elasticsearch:
-    """
-    Establish a connection to the Elasticsearch cluster with timeout and retry logic.
-
-    Returns:
-        Elasticsearch: The connected Elasticsearch client.
-    """
-    return Elasticsearch(
-        ["http://localhost:9200"],
-        http_auth=(user, password),
-        request_timeout=30,
-        max_retries=5,
-        retry_on_timeout=True
-    )
 
 
-def setup_elasticsearch(user: str, password: str, policy_name: str, policy_file: str, template_name: str, template_file: str) -> None:
+def setup_elasticsearch(policy_name: str, policy_file: str, template_name: str, template_file: str) -> None:
     """
-    Connects to Elasticsearch to set up the ILM policy and index template.
+    Connects to Elasticsearch to set up the ILM policy and index template idempotently.
 
     Args:
-        user (str): The username for Elasticsearch.
-        password (str): The password for Elasticsearch.
         policy_name (str): The name for the ILM policy.
         policy_file (str): The file path to the ILM policy JSON file.
         template_name (str): The name for the index template.
         template_file (str): The file path to the index template JSON file.
     """
     try:
-        es = connect_to_es(user, password)
+        es = es_client_setup()
         
         # 1. Setup ILM Policy
         with open(policy_file, "r") as f:
             policy_body = json.load(f)
-        es.ilm.put_lifecycle(name=policy_name, body=policy_body)
-        write(f"Successfully created or updated ILM policy: {policy_name}")
+        
+        try:
+            existing_policy = es.ilm.get_lifecycle(name=policy_name)
+            if existing_policy[policy_name]["policy"] != policy_body["policy"]:
+                es.ilm.put_lifecycle(name=policy_name, body=policy_body)
+                write(f"Successfully updated ILM policy: {policy_name}", LOG_FILE)
+            else:
+                write(f"ILM policy '{policy_name}' is already up to date.", LOG_FILE)
+        except NotFoundError:
+            es.ilm.put_lifecycle(name=policy_name, body=policy_body)
+            write(f"Successfully created ILM policy: {policy_name}", LOG_FILE)
 
         # 2. Setup Index Template
         with open(template_file, "r") as f:
             template_body = json.load(f)
-        es.indices.put_index_template(name=template_name, body=template_body)
-        write(f"Successfully created or updated index template: {template_name}")
+
+        try:
+            existing_template = es.indices.get_index_template(name=template_name)
+            if existing_template["index_templates"][0]["index_template"] != template_body:
+                 es.indices.put_index_template(name=template_name, body=template_body)
+                 write(f"Successfully updated index template: {template_name}", LOG_FILE)
+            else:
+                write(f"Index template '{template_name}' is already up to date.", LOG_FILE)
+        except NotFoundError:
+            es.indices.put_index_template(name=template_name, body=template_body)
+            write(f"Successfully created index template: {template_name}", LOG_FILE)
 
     except Exception as e:
-        write(f"Error setting up Elasticsearch: {e}")
-        # Optionally re-raise the exception if it should stop the script
-        # raise e
+        write(f"Error setting up Elasticsearch: {e}", LOG_FILE)
     
-
-##################################################### Main ####################################################
-if __name__ == "__main__":
-    out = []
-
-    if PASSWORD is None:
-        raise Exception("Error: password cannot be null!")
-
-    # Setup Elasticsearch ILM and Index Template
-    setup_elasticsearch(
-        user=USER,
-        password=PASSWORD,
-        policy_name="gdelt_14d_retention_policy",
-        policy_file="./logstash/ilm_policy.json",
-        template_name="gkg_template",
-        template_file="./logstash/template.json"
-    )
-
-    while True:
-        sleep(10)
-        all_json = [i for i in os.listdir(directory) if ".json" in i]
-        for filename in all_json:
-            if es_check_data(filename.split(".")[0]):
-                write_all(f"Loaded JSON file into Elasticsearch: {filename}", [LOG_FILE, JSON_LOG_FILE])
-                file_path = os.path.join(directory, filename)
-
-                # Stop deletion until Spark has processed the file
-                while True:
-                    with open(PYSPARK_LOG_FILE, "r") as f:
-                        timestamp = f.read()
-                    if timestamp not in file_path:
-                        break
-
-                os.remove(file_path)
 
 def server_scrape():
     '''
@@ -646,11 +589,18 @@ def server_scrape():
             # Repeats the scraping and downloading process every 15 min
             sleep(15*60)     
 
-        except:
+        except Exception as e:
             write_all(f"Error: {url} cannot be successfully downloaded!", file_list)
+            raise e
 
 ############################################# Main ############################################
 if __name__ == "__main__":
+    setup_elasticsearch(
+        policy_name="gdelt_14d_retention_policy",
+        policy_file="ilm_policy.json",
+        template_name="gkg-template",
+        template_file="template.json"
+    )
     thread1 = threading.Thread(target=server_scrape, daemon=True)
     thread2 = threading.Thread(target=process_downloaded_files, daemon=True)
     thread3 = threading.Thread(target=delete_processed_json, daemon=True)
