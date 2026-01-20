@@ -388,25 +388,6 @@ def delete_processed_json() -> None:
             write_all(f"Error in delete thread: {e}", [LOG_FILE])
 
 
-def cp_json_to_ingest(file_path: str) -> None:
-    """
-    Copies processed JSON files over to the ingestion folder to be fed into Elasticsearch.
-
-    Args:
-        file_path (str): The full file path to the file to be checked & copied.
-    """
-    logstash_path = "./logstash_ingest_data/json"
-    os.makedirs(logstash_path, exist_ok=True)    
-    if os.path.isfile(file_path) and file_path.endswith(".json"):
-        target_path = os.path.join(logstash_path, os.path.basename(file_path))
-        shutil.copy(file_path, target_path)
-        print(f"Copied {file_path} to {target_path}")
-    else:
-        print(f"Invalid file: {file_path} (Not a .json file or file doesn't exist)")
-
-        
-
-
 def setup_elasticsearch(policy_name: str, policy_file: str, template_name: str, template_file: str) -> None:
     """
     Connects to Elasticsearch to set up the ILM policy and index template idempotently.
