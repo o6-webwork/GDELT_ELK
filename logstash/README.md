@@ -132,6 +132,11 @@ These warnings from the X-Pack license checker do not affect data ingestion. The
 
 ---
 
+### ILM 14-day Retention Policy:
+Refer to `ilm_policy.json`, `logstash.conf` & `template.json` for more information. These files have been newly created / edited to structure the input data into Elasticsearch as separate indices. All data will be stored in the same index labelled under the date they were pulled & ingested. Each new day, a new data index is automatically created with the ingestion of new data.
+
+All created data indices under the `gkg-*` alias will automatically be assigned to `gdelt_14d_retention_policy`. At the end of 14 days, these indices will automatically be deleted. For simplicity, the ILM policy does not have a hot / cold phase implemented.
+
 ## Conclusion
 
 This setup allows Logstash to monitor a specified folder for new JSON files, ingest them into Elasticsearch, and remember which files have been processed using a persistent `sincedb` file. Adjust the parameters as needed for your environment, and ensure all services are on the same Docker network for smooth communication.

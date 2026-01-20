@@ -170,6 +170,8 @@ services:
         condition: service_healthy
     networks:
       - elastic
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
 
   logstash01:
     depends_on:
@@ -209,6 +211,8 @@ services:
       - ${PIPELINE_MONITORING_PORT}:7979
     networks:
       - elastic
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
 
   reportsui_backend:
     build: ./reports-ui/backend
