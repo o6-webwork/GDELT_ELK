@@ -477,7 +477,7 @@ def server_scrape():
             sleep(15*60)     
 
         except Exception as e:
-            write_all(f"Error: {url} cannot be successfully downloaded!", file_list)
+            write_all(f"An error occurred during the scraping process: {e}", file_list)
             raise e
 
 ############################################# Main ############################################
