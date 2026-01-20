@@ -205,124 +205,20 @@ def run_pipeline(raw_file: str, json_output: str) -> None:
         concat_ws("-", col("GkgRecordId.Date").cast("string"), col("GkgRecordId.NumberInBatch").cast("string"))
     )
 
-    # Drops redundant data from dataframe.
     to_drop = ["V1Counts", "V1Locations", "V1Orgs", "V1Persons", "V1Themes", "V21Amounts", "V21Counts", "V21EnhancedDates"]
-    for i in to_drop: df_transformed = df_transformed.drop(i)
+    for i in to_drop:
+        df_transformed = df_transformed.drop(i)
 
-    # Restructuring desired columns
     V15Tone_fields = ['Tone', 'PositiveScore', "NegativeScore", 'Polarity', "ActivityRefDensity", "SelfGroupRefDensity"]
-    df_transformed = restructure_columns(df_transformed, "V15Tone", V15Tone_fields)
     V21Quotations_fields = ["Verb", "Quote"]
-    df_transformed = restructure_columns(df_transformed, "V21Quotations", V21Quotations_fields)
     V2Persons_fields = ["V1Person"]
-    df_transformed = restructure_columns(df_transformed, "V2Persons", V2Persons_fields)
     V2Orgs_fields = ["V1Org"]
-    df_transformed = restructure_columns(df_transformed, "V2Orgs", V2Orgs_fields)
     V2Locations_fields = ["FullName", "CountryCode", "ADM1Code", "ADM2Code", "LocationLatitude", "LocationLongitude", "FeatureId"]
-    df_transformed = restructure_columns(df_transformed, "V2Locations", V2Locations_fields)
     V2EnhancedThemes_fields = ["V2Theme"]
-    df_transformed = restructure_columns(df_transformed, "V2EnhancedThemes", V2EnhancedThemes_fields)
-    
     V2GCAM_fields = ["DictionaryDimId"]
     V21AllNames_fields = ["Name"]
-    df_transformed = df_transformed.drop("V1Counts") 
-    df_transformed = df_transformed.drop("V1Locations")
-    df_transformed = df_transformed.drop("V1Orgs")
-    df_transformed = df_transformed.drop("V1Persons")
-    df_transformed = df_transformed.drop("V1Themes")
-    df_transformed = df_transformed.drop("V21Amounts")
-    df_transformed = df_transformed.drop("V21Counts")
-    df_transformed = df_transformed.drop("V21EnhancedDates")
 
-
-    df_transformed = df_transformed.withColumn(
-        "V15Tone",
-        struct(
-            col("V15Tone.Tone"),
-            col("V15Tone.PositiveScore"),
-            col("V15Tone.NegativeScore"),
-            col("V15Tone.Polarity"),
-            col("V15Tone.ActivityRefDensity"),
-            col("V15Tone.SelfGroupRefDensity")
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V21Quotations",
-        struct(
-            col("V21Quotations.Verb"),
-            col("V21Quotations.Quote")
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2Persons",
-        struct(
-            col("V2Persons.V1Person")
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2Orgs",
-        struct(
-            col("V2Orgs.V1Org")
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2Locations",
-        struct(
-            col("V2Locations.FullName"),
-            col("V2Locations.CountryCode"),
-            col("V2Locations.ADM1Code"),
-            col("V2Locations.ADM2Code"),
-            col("V2Locations.LocationLatitude"),
-            col("V2Locations.LocationLongitude"),
-            col("V2Locations.FeatureId")
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2EnhancedThemes",
-        struct(
-            col("V2EnhancedThemes.V2Theme")
-        )
-    )
-    
-    df_transformed = df_transformed.withColumn(
-        "V2Locations",
-        struct(
-            array_distinct(col("V2Locations.FullName")).alias("FullName"),
-            array_distinct(col("V2Locations.CountryCode")).alias("CountryCode"),
-            array_distinct(col("V2Locations.ADM1Code")).alias("ADM1Code"),
-            array_distinct(col("V2Locations.ADM2Code")).alias("ADM2Code"),
-            array_distinct(col("V2Locations.LocationLatitude")).alias("LocationLatitude"),
-            array_distinct(col("V2Locations.LocationLongitude")).alias("LocationLongitude"),
-            array_distinct(col("V2Locations.FeatureId")).alias("FeatureId")
-        )
-    )
-    df_transformed = df_transformed.withColumn(
-        "V2Persons",
-        struct(
-            array_distinct(col("V2Persons.V1Person")).alias("V1Person"),
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2EnhancedThemes",
-        struct(
-            array_distinct(col("V2EnhancedThemes.V2Theme")).alias("V2Theme"),
-        )
-    )
-
-    df_transformed = df_transformed.withColumn(
-        "V2Orgs",
-        struct(
-            array_distinct(col("V2Orgs.V1Org")).alias("V1Org"),
-        )
-    )
-
-    # Remove duplicates
+    df_transformed = restructure_columns(df_transformed, "V15Tone", V15Tone_fields)
     df_transformed = restructure_array_struct_column(df_transformed, "V2Locations", V2Locations_fields)
     df_transformed = restructure_array_struct_column(df_transformed, "V2Persons", V2Persons_fields)
     df_transformed = restructure_array_struct_column(df_transformed, "V2EnhancedThemes", V2EnhancedThemes_fields)
@@ -331,27 +227,18 @@ def run_pipeline(raw_file: str, json_output: str) -> None:
     df_transformed = restructure_array_struct_column(df_transformed, "V21Quotations", V21Quotations_fields)
     df_transformed = restructure_array_struct_column(df_transformed, "V21AllNames", V21AllNames_fields)
     
-    # Changing column names
     column_names = ["V21ShareImg", "V21SocImage", "V2DocId", "V21RelImg", "V21Date"]
     for col_name in column_names:
         df_transformed = df_transformed.withColumn(col_name, col(f"{col_name}.{col_name}"))
 
-    # Add datatype field for dynamic indexing in Logstash
     df_transformed = df_transformed.withColumn("datatype", F.lit("gkg"))
-
-    # Reduce to a single partition so that we get one output file.
     df_transformed.coalesce(1).write.mode("overwrite").json(json_output)
     write_all(f"Pipeline completed. Single JSON output written to {json_output}", [LOG_FILE, JSON_LOG_FILE])
-
-    # Locates a JSON output file
     json_part_file = glob.glob(os.path.join(json_output, "part-00000-*.json"))[0]
-
-    # JSON file creation
     date_part = str((raw_file.split('/')[2].split('.'))[0])
     new_file_name = f"{date_part}.json"
     shutil.move(json_part_file, os.path.join(json_output, new_file_name))
     move_json_to_ingest(os.path.join(json_output, new_file_name))
-
     spark.stop()
 
 def move_json_to_ingest(file_path: str) -> None:
