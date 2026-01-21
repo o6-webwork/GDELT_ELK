@@ -24,7 +24,6 @@ from schemas.gkg_schema import gkg_schema
 from etl.parse_gkg import gkg_parser
 
 
-sys.setrecursionlimit(10000)
 load_dotenv()
 
 
