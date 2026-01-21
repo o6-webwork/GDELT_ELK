@@ -9,3 +9,4 @@ requests==2.32.3
 urllib3==2.3.0
 pytz
 elasticsearch==8.18.0
+python-dotenv==1.2.0
