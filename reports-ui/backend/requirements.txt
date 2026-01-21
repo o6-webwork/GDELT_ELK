@@ -4,3 +4,7 @@ pandas==2.2.2
 pymannkendall==1.4.3
 elasticsearch==8.17.2
 sentence-transformers==4.1.0 
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+
+
