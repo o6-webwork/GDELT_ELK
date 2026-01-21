@@ -459,7 +459,7 @@ def server_scrape():
 
         except Exception as e:
             write_all(f"An error occurred during the scraping process: {e}", file_list)
-            raise e
+            sleep(60)  # Add a delay to prevent rapid retries on persistent errors.
 
 ############################################# Main ############################################
 if __name__ == "__main__":
