@@ -128,7 +128,7 @@ def download_and_extract(url: str) -> None:
         url (str): The URL to download the zip file from.
     """
     file_name = url.split("/")[-1]
-    if any(f in os.listdir(DOWNLOAD_FOLDER) for f in [file_name.replace(".zip", "")]):
+    if os.path.exists(os.path.join(DOWNLOAD_FOLDER, file_name.replace(".zip", ""))):
          write_all(f"Extraction skipped: {file_name} (or contents) already exists.", [LOG_FILE, SCRAPING_LOG_FILE])
          return
 
