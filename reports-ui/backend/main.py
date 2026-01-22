@@ -17,7 +17,7 @@ from data_loader import get_fields_from_elasticsearch, load_data_from_elasticsea
 from alert_generation import check_alerts_for_query, get_interval_timedelta, PARAM_SETS
 from database import SessionLocal, engine, Base, MonitoredTask, AlertHistory, Dashboard, get_db, create_db_tables
 
-ES_INDEX = "gkg"
+ES_INDEX = "gkg-*"
 ES_HOST = "https://es01:9200"
 ES_USERNAME = "elastic"
 ES_PASSWORD = "changeme"

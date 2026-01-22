@@ -25,6 +25,7 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     volumes:
       - certs:/usr/share/elasticsearch/config/certs
+      - ./logstash:/usr/share/elasticsearch/logstash
     user: "0"
     command: >
       bash -c '
@@ -68,6 +69,8 @@ services:
         until curl -s --cacert config/certs/ca/ca.crt https://es01:9200 | grep -q "missing authentication credentials"; do sleep 30; done;
         echo "Setting kibana_system password";
         until curl -s -X POST --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://es01:9200/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
+        echo "Creating ILM policy";
+        curl -s -X PUT --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://es01:9200/_ilm/policy/gdelt_14d_retention_policy -d@/usr/share/elasticsearch/logstash/ilm_policy.json;
         echo "All done!";
       '
     healthcheck:
@@ -80,7 +83,7 @@ services:
   es01:
     depends_on:
       setup:
-        condition: service_healthy
+        condition: service_completed_successfully
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     labels:
       co.elastic.logs/module: elasticsearch
