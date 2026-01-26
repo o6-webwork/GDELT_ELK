@@ -1,7 +1,5 @@
-import os
 import datetime
 from decimal import Decimal
-from cloudpathlib import CloudPath, AzureBlobClient
 
 
 # https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/latest/authentication

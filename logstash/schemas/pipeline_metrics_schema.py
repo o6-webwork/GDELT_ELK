@@ -1,6 +1,5 @@
-from pyspark.sql.types import StringType, IntegerType, DecimalType, LongType, \
-                            DateType, TimestampType, StructType, StructField, \
-                            ArrayType, BooleanType, Row, DoubleType
+from pyspark.sql.types import StringType, DecimalType, TimestampType, StructType, StructField, \
+                            BooleanType
 
 metrics_schema = StructType([    
     StructField('file_name', StringType(), True),

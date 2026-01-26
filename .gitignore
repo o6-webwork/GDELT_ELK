@@ -2,12 +2,21 @@
 logstash/logstash_ingest_data/json/*
 logstash/csv
 logstash/logs
+
+# Python
+__pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
 
 # Ignore Env var
 .env
-*/__pycache__
-/.vscode
 
+# IDE
+.vscode/
+.idea/
+
+# Virtual environments
 venv/
-.venv
+.venv/

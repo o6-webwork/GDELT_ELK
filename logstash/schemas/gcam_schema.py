@@ -1,5 +1,4 @@
-from pyspark.sql.types import StringType, IntegerType, DecimalType, LongType, \
-    DateType, TimestampType, StructType, StructField, ArrayType, BooleanType, FloatType, DoubleType
+from pyspark.sql.types import StringType, IntegerType, StructType, StructField
 
 
 GCAM_schema = StructType([    

@@ -1,6 +1,5 @@
 import os
 import sys
-import logging
 import datetime
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
@@ -12,7 +11,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from config.toml_config import config
 from schemas.gkg_schema import gkg_schema
 from etl.parse_gkg import gkg_parser
-
 
 
 # build spark
@@ -100,7 +98,7 @@ class GkgBatchWriter:
                 return processed_gkg_array, False
 
             else:
-                print(f'No record of processed GKG files. Processing GKG and creating pipeline metrics...')
+                print('No record of processed GKG files. Processing GKG and creating pipeline metrics...')
                 return [],[]
 
         except Exception as e:
@@ -125,7 +123,7 @@ class GkgBatchWriter:
                 if f[0].endswith('.csv'):
                     gkg_glob_list.append(f[0])
 
-            print(f'Checking for previously processed GKG files...')
+            print('Checking for previously processed GKG files...')
             processed_gkg = GkgBatchWriter().check_processed()[0]
 
                 
@@ -150,15 +148,12 @@ class GkgBatchWriter:
 
                     if processor.period == '15min':
                         gkg_key = f'{processor.year}{processor.month}{processor.day}{processor.hour}{processor.minute}|{processor.gkg_version}'
-                        etl_mode = '15min'
 
                     elif processor.period == 'hourly':
                         gkg_key = f'{processor.year}{processor.month}{processor.day}{processor.hour}|{processor.gkg_version}'
-                        etl_mode = 'hourly'
 
                     elif processor.period == 'daily':
                         gkg_key = f'{processor.year}{processor.month}{processor.day}|{processor.gkg_version}'
-                        etl_mode = 'daily'
 
                     else:
                         raise ValueError("BATCH PERIOD must be set to 'daily', 'hourly', or '15min' within config.toml file.")
@@ -259,9 +254,6 @@ class GkgBatchWriter:
             writer = GkgBatchWriter()
             writer.period = self.config['BATCH']['PERIOD']
 
-            processed_gkg = GkgBatchWriter().check_processed()
-
-            
             for value in rdd_paths:
 
                 single_path = value.split(',')[0]
@@ -348,7 +340,7 @@ class GkgBatchWriter:
         """
         """
         try:
-            if GkgBatchWriter().check_processed()[1] == True:
+            if GkgBatchWriter().check_processed()[1]:
                 for f in dbutils.fs.ls(f'{DBFS_MNT}{PIPELINE_METRICS_FINAL}'):
                     if not f[0].startswith('.'):
                         # full_file_name = f'{PIPELINE_METRICS_FINAL}{f}'
@@ -369,7 +361,7 @@ class GkgBatchWriter:
                 # for DEBUG purposes - showing count including duplicates
                 print(f'DEBUG: Pipeline metrics temp df count: {pipeline_metrics_temp_df.count()}')
 
-            elif GkgBatchWriter().check_processed()[1] == False:
+            elif not GkgBatchWriter().check_processed()[1]:
                 print('joining from temp pipeline metrics df')
                 pipeline_metrics_temp_df = spark.read.format('parquet').load(f'{ADLS_STORAGE}{PIPELINE_METRICS_TEMP}/*.parquet') 
                 unique_metrics_df = pipeline_metrics_temp_df.dropDuplicates(['file_name', 'gkg_timestamp'])       
@@ -399,10 +391,10 @@ class GkgBatchWriter:
             print(f'Total GKG records: {pipeline_metrics_final_df.count()}')
 
 
-            print(f'Deleting temp files in pipeline metrics temp folder...')
+            print('Deleting temp files in pipeline metrics temp folder...')
             for f in dbutils.fs.ls(f'{DBFS_MNT}{PIPELINE_METRICS_TEMP}'):
                 dbutils.fs.rm(f[0])
-            print(f'Deleted all files in pipeline metrics temp folder.')
+            print('Deleted all files in pipeline metrics temp folder.')
 
 
         except Exception as e:
