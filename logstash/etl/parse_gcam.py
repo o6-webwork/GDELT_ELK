@@ -1,19 +1,7 @@
 # class for parsing the GCAM codebook
 class GcamCodebook:
 
-    def __init__(self):
-
-        self.variable = str('')
-        self.dictionary_id = int(0)
-        self.dimension_id = int(0)
-        self.value_type = str('')
-        self.language_code = str('')
-        self.dict_human_name = str('')
-        self.dim_human_name = str('')
-        self.dict_citation = str('')
-
-
-    def __init__(self, variable, dictionary_id, dimension_id, value_type, language_code, 
+    def __init__(self, variable, dictionary_id, dimension_id, value_type, language_code,
             dict_human_name, dim_human_name, dict_citation):
 
             self.variable = variable

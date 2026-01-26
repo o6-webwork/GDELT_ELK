@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 import streamlit as st
 import requests
 import pandas as pd
@@ -14,8 +16,8 @@ with col[0]:
     st.markdown("#### 🚦 Top Trend Metrics")
     st.markdown("##### 🔍 Filters")
 
-    start_date = st.date_input("Start Date", pd.to_datetime("2025-04-13"))
-    end_date = st.date_input("End Date", pd.to_datetime("2025-04-14"))
+    start_date = st.date_input("Start Date", date.today() - timedelta(days=1))
+    end_date = st.date_input("End Date", date.today())
     
     fields_response = requests.get(f"{BACKEND_URL}/fields")
     

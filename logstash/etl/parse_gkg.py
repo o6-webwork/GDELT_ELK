@@ -1,11 +1,6 @@
 import datetime
 from decimal import Decimal
-import datetime
-import sys
-import os
 from pyspark.sql.types import Row
-
-
 
 
 class GkgRecord:
@@ -211,7 +206,7 @@ class TranslationInfo:
     def values(self):
 
         if self.srclc == '':
-            self.srclc == None
+            self.srclc = None
         if self.eng == '':
             self.eng = None
 
@@ -446,8 +441,9 @@ def create_v1_count_array(str_: str):
         for item in val:
             v1_count = create_v1_count(item)
             array.append(v1_count)
-            
-    if array: return array[:-1]
+
+    if array:
+        return array[:-1]
 
 
 
@@ -488,8 +484,9 @@ def create_v21_count_array(str_: str):
         for item in val:
             v21_count = create_v21_count(item)
             array.append(v21_count)
-            
-    if array: return array[:-1]
+
+    if array:
+        return array[:-1]
 
 
 
@@ -505,8 +502,9 @@ def create_v1_themes_array(str_: str):
         val = str_.split(';')
         for item in val:
             array.append(item)
-    
-    if array: return Row(array[:-1])
+
+    if array:
+        return Row(array[:-1])
 
 
 
@@ -537,7 +535,8 @@ def create_v2_enhanced_themes_array(str_: str):
             v2_enhanced_theme = create_v2_enhanced_theme(item)
             array.append(v2_enhanced_theme)
 
-    if array: return array[:-1]
+    if array:
+        return array[:-1]
 
 
 
@@ -574,7 +573,8 @@ def create_v1_locations_array(str_: str):
             v1_location = create_v1_location(item)
             array.append(v1_location)
 
-    if array: return array
+    if array:
+        return array
 
 
 
@@ -615,7 +615,8 @@ def create_v2_enhanced_locations_array(str_: str):
             v2_location = create_v2_enhanced_location(item)
             array.append(v2_location)
 
-    if array: return array
+    if array:
+        return array
 
 
 
@@ -632,7 +633,8 @@ def create_v1_persons_array(str_: str) -> Row():
         for item in val:
             array.append(item)
 
-    if array: return Row(array)
+    if array:
+        return Row(array)
 
 
 
@@ -663,7 +665,8 @@ def create_v2_enhanced_persons(str_: str):
             v2_enhanced_person = create_enhanced_person(item)
             array.append(v2_enhanced_person)
 
-    if array: return array
+    if array:
+        return array
 
 
 
@@ -680,7 +683,8 @@ def create_v1_orgs(str_: str) -> Row():
         for item in val:
             array.append(item)
 
-    if array: return Row(array)
+    if array:
+        return Row(array)
 
 
 
@@ -710,7 +714,8 @@ def create_v2_enhanced_orgs(str_: str):
             v2_enhanced_org = create_enhanced_org(item)
             array.append(v2_enhanced_org)
 
-    if array: return array
+    if array:
+        return array
 
 
 
@@ -764,7 +769,8 @@ def create_v21_enhanced_dates(str_: str):
             v21_enhanced_date = create_enhanced_date(item)
             array.append(v21_enhanced_date)
 
-    if array: return array
+    if array:
+        return array
 
 
 
@@ -795,7 +801,8 @@ def create_v2_gcam(str_: str):
             v2_gcam = create_gcam(item)
             array.append(v2_gcam)
 
-    if array: return array 
+    if array:
+        return array
 
 
 
@@ -826,7 +833,8 @@ def create_v21_rel_img(str_: str) -> Row():
         for item in val:
             array.append(item)
 
-    if array: return Row(array)
+    if array:
+        return Row(array)
 
 
 
@@ -843,7 +851,8 @@ def create_v21_soc_img(str_: str) -> Row():
         for item in val:
             array.append(item)
 
-    if array: return Row(array[:-1])
+    if array:
+        return Row(array[:-1])
 
 
 
@@ -860,7 +869,8 @@ def create_v21_soc_vid(str_: str) -> Row():
         for item in val:
             array.append(item)
 
-    if array: return Row(array[:-1])
+    if array:
+        return Row(array[:-1])
 
 
 
@@ -892,7 +902,8 @@ def create_v21_quotes_array(str_: str):
             v21_quote = create_quotation(item)
             array.append(v21_quote)
 
-    if array: return array
+    if array:
+        return array
 
 
 
@@ -923,7 +934,8 @@ def create_v21_all_names(str_: str):
             v21_name = create_name(item)
             array.append(v21_name)
 
-    if array: return array
+    if array:
+        return array
 
 
 
@@ -955,7 +967,8 @@ def create_v21_amounts(str_: str):
             v21_amount = create_amount(item)
             array.append(v21_amount)
 
-    if array: return array[:-1]
+    if array:
+        return array[:-1]
 
 
 

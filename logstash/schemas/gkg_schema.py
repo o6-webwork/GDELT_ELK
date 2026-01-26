@@ -1,5 +1,5 @@
 from pyspark.sql.types import StringType, IntegerType, DecimalType, LongType, \
-     DateType, TimestampType, StructType, StructField, ArrayType, BooleanType, FloatType, DoubleType
+     TimestampType, StructType, StructField, ArrayType, BooleanType, DoubleType
 
 
 # Schema for GKG 2.0

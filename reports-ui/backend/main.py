@@ -2,7 +2,6 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import pymannkendall as mk
-from datetime import datetime
 
 from data_loader import get_fields_from_elasticsearch, load_data_from_elasticsearch
 
