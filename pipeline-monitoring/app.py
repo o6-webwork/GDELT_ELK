@@ -503,7 +503,7 @@ async def archive_download(start_date: str = Form(...), end_date: str = Form(...
     try:
         datetime.datetime.strptime(start_date, "%Y-%m-%d")
         datetime.datetime.strptime(end_date, "%Y-%m-%d")
-    except Exception:
+    except ValueError:
         return JSONResponse(content={"error": "Invalid date format."}, status_code=400)
     global archive_thread, archive_cancel_event, archive_progress
     archive_cancel_event.clear()
