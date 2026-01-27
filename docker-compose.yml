@@ -83,7 +83,7 @@ services:
   es01:
     depends_on:
       setup:
-        condition: service_completed_successfully
+        condition: service_started
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     labels:
       co.elastic.logs/module: elasticsearch
@@ -239,10 +239,11 @@ services:
       - "8501:8501"
     networks:
       - elastic
-    # volumes:
-    #   - ./reports-ui/frontend:/app/ # Maps host ./reports-ui/frontend to /app in container
     volumes:
     - ./reports-ui/frontend:/app 
+    depends_on:
+      reportsui_backend:
+        condition: service_started
 
   postgres_db: 
     image: postgres:17 
