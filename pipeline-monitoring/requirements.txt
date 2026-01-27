@@ -1,8 +1,8 @@
-python-multipart
-jinja2
+python-multipart==0.0.22
+jinja2==3.1.6
 Werkzeug==2.2.2
-requests==2.26.0
-pytz
+requests==2.32.3
+pytz==2025.2
 elasticsearch==8.18.0
-fastapi==0.95.1
-uvicorn==0.22.0
+fastapi==0.115.4
+uvicorn==0.32.0

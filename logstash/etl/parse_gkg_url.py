@@ -1,12 +1,5 @@
 class GkgUrlParser:
 
-    def __init__(self):
-
-        self.date_time = int(0)
-        self.url_suffix = str('')
-        self.gkg_url = str('')
-
-
     def __init__(self, date_time, url_suffix, gkg_url):
 
         self.date_time = date_time

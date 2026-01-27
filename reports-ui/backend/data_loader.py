@@ -1,7 +1,6 @@
 from elasticsearch import Elasticsearch
 from datetime import date, timedelta, datetime
 import pandas as pd
-import json
 
 # --- CONFIG ---
 ES_HOST = "https://es01:9200"

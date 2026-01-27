@@ -1,13 +1,23 @@
 # Ignore Logstash ingestion-related files
-logstash/logstash_ingest_data/json/*
+logstash/logstash_ingest_data/*
+!logstash/logstash_ingest_data/.gitkeep
 logstash/csv
 logstash/logs
+
+# Python
+__pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
 
 # Ignore Env var
 .env
-*/__pycache__
-/.vscode
 
+# IDE
+.vscode/
+.idea/
+
+# Virtual environments
 venv/
-.venv
+.venv/
