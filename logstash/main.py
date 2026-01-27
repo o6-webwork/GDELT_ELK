@@ -24,7 +24,6 @@ from schemas.gkg_schema import gkg_schema
 from etl.parse_gkg import gkg_parser
 
 
-sys.setrecursionlimit(10000)
 load_dotenv()
 
 
@@ -129,7 +128,7 @@ def download_and_extract(url: str) -> None:
         url (str): The URL to download the zip file from.
     """
     file_name = url.split("/")[-1]
-    if any(f in os.listdir(DOWNLOAD_FOLDER) for f in [file_name.replace(".zip", "")]):
+    if os.path.exists(os.path.join(DOWNLOAD_FOLDER, file_name.replace(".zip", ""))):
          write_all(f"Extraction skipped: {file_name} (or contents) already exists.", [LOG_FILE, SCRAPING_LOG_FILE])
          return
 
@@ -459,7 +458,7 @@ def server_scrape():
 
         except Exception as e:
             write_all(f"An error occurred during the scraping process: {e}", file_list)
-            raise e
+            sleep(60)  # Add a delay to prevent rapid retries on persistent errors.
 
 ############################################# Main ############################################
 if __name__ == "__main__":

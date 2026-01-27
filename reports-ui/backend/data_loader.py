@@ -17,34 +17,29 @@ es = Elasticsearch(
     basic_auth=(ES_USERNAME, ES_PASSWORD),
     verify_certs=False  # use True in production!
 )
-def get_fields_from_elasticsearch(index: str) -> list:
-    array_fields = []
-    seen_fields = set()
+def get_fields_from_elasticsearch(index_pattern: str) -> list:
+    array_fields = set()
 
     try:
-        mapping = es.indices.get_mapping(index=index)
-        properties = mapping[index]['mappings'].get('properties', {})
+        mappings = es.indices.get_mapping(index=index_pattern)
 
         def extract_array_fields(properties, prefix=""):
             for field, field_mapping in properties.items():
-                field_type = field_mapping.get('type')
-                if field_type == 'text':
-                    if 'fields' in field_mapping and 'keyword' in field_mapping['fields']:
-                        array_fields.append(prefix + field + '.keyword')
-                        seen_fields.add(prefix + field)
-
+                # Check for .keyword sub-fields
+                if 'fields' in field_mapping and 'keyword' in field_mapping['fields']:
+                    array_fields.add(prefix + field + '.keyword')
+                
+                # If it's a nested object, recurse
                 if 'properties' in field_mapping:
                     extract_array_fields(field_mapping['properties'], prefix + field + '.')
 
-        extract_array_fields(properties)
+        # Iterate through every index found (e.g., gkg-1, gkg-2)
+        for actual_index_name in mappings:
+            properties = mappings[actual_index_name]['mappings'].get('properties', {})
+            extract_array_fields(properties)
 
-        for field in array_fields.copy():
-            if field.endswith('.keyword'):
-                root_field = field.rsplit('.', 1)[0]
-                if root_field in seen_fields:
-                    array_fields = [f for f in array_fields if f != root_field]
+        return list(array_fields)
 
-        return array_fields
     except Exception as e:
         print(f"Error fetching fields: {e}")
         return []
