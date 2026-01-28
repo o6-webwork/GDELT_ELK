@@ -10,7 +10,6 @@ from elasticsearch import Elasticsearch, NotFoundError
 from io import BytesIO
 from time import sleep
 from typing import List
-import sys
 import json
 from dotenv import load_dotenv
 

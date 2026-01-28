@@ -13,14 +13,14 @@ import pandas as pd
 # If you structured it differently (e.g., as an installable package), adjust imports
 try:
     from shared_code.database import SessionLocal, MonitoredTask, AlertHistory # Get your SQLAlchemy models and session
-    from shared_code.alert_generation import check_alerts_for_query, sanitize_alert_info # Your core alerting logic
+    from shared_code.alert_generation import check_alerts_for_query # Your core alerting logic
 except ModuleNotFoundError:
     print("ERROR: Could not import shared_code. Ensure alert_generation.py and database.py are accessible.")
     print("       Check Dockerfile COPY paths and PYTHONPATH environment variable if running in Docker.")
     # Fallback for local testing if files are in a sibling directory structure
     sys.path.append(os.path.join(os.path.dirname(__file__), '../reports-ui/backend'))
     from database import SessionLocal, MonitoredTask, AlertHistory
-    from alert_generation import check_alerts_for_query, sanitize_alert_info
+    from alert_generation import check_alerts_for_query
 
 
 ES_HOST = "https://es01:9200"
@@ -56,7 +56,7 @@ def get_latest_bucket_end_time(reference_time: datetime.datetime, interval_minut
 
 def fetch_active_monitored_tasks(db: Session) -> list[MonitoredTask]:
     """Fetches all active tasks from the database."""
-    return db.query(MonitoredTask).filter(MonitoredTask.is_active == True).all()
+    return db.query(MonitoredTask).filter(MonitoredTask.is_active).all()
     # active_tasks = db.query(MonitoredTask).filter(MonitoredTask.is_active == True).order_by(MonitoredTask.last_checked_at).all()
 
 
@@ -148,7 +148,7 @@ def main_polling_loop():
     while True:
         db = SessionLocal() # Create a new session for this polling cycle
         try:
-            print(f"--- Starting new polling cycle ---")
+            print("--- Starting new polling cycle ---")
             active_tasks = fetch_active_monitored_tasks(db)
             print(f"Found {len(active_tasks)} active tasks to check.")
 
@@ -199,7 +199,7 @@ if __name__ == "__main__":
         print("Elasticsearch connection successful.")
     except Exception as e:
         print(f"CRITICAL: Elasticsearch connection test failed: {e}")
-        print(f"Ensure Elasticsearch is running at {ES_HOST_URL}.")
+        print(f"Ensure Elasticsearch is running at {ES_HOST}.")
         sys.exit(1)
 
     main_polling_loop()

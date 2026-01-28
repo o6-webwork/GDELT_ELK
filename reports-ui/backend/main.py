@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 
 from data_loader import get_fields_from_elasticsearch, load_data_from_elasticsearch
 from alert_generation import check_alerts_for_query, get_interval_timedelta, PARAM_SETS
-from database import SessionLocal, engine, Base, MonitoredTask, AlertHistory, Dashboard, get_db, create_db_tables
+from database import MonitoredTask, AlertHistory, Dashboard, get_db, create_db_tables
 
 ES_INDEX = "gkg-*"
 ES_HOST = "https://es01:9200"
@@ -39,7 +39,7 @@ class AlertAcknowledgeResponse(BaseModel):
     is_acknowledged: bool
     acknowledged_at: dt.datetime | None = None # Optional: timestamp of acknowledgement
 
-class MonitoredTaskBase(BaseModel):
+class MonitoredTaskBase(BaseModel): 
     query_string: str
     interval_minutes: int = Field(default=15, ge=1) # Default to 15 min, ensure >= 15 min
 
@@ -230,7 +230,6 @@ async def check_gdelt_alerts(
     Endpoint to receive an Elasticsearch query from the frontend,
     run it, and check for alerts.
     """
-    parsed_end_datetime = None
     sg_timezone = pytz.timezone('Asia/Singapore')
     utc_timezone = pytz.utc # Use UTC for backend processing and ES
 
@@ -355,7 +354,7 @@ async def create_monitoring_task(task_in: MonitoredTaskCreate, db: Session = Dep
     # Optional: Check for existing active task with the same query string
     existing_task = db.query(MonitoredTask).filter(
         MonitoredTask.query_string == task_in.query_string,
-        MonitoredTask.is_active == True
+        MonitoredTask.is_active
     ).first()
     if existing_task:
         raise HTTPException(
@@ -419,7 +418,7 @@ async def read_monitoring_tasks(
     """
     query_obj = db.query(MonitoredTask)
     if active_only:
-        query_obj = query_obj.filter(MonitoredTask.is_active == True)
+        query_obj = query_obj.filter(MonitoredTask.is_active)
 
     if dashboard_id is not None:
         query_obj = query_obj.filter(MonitoredTask.dashboard_id == dashboard_id)
@@ -430,7 +429,7 @@ async def read_monitoring_tasks(
     for task_db_orm in tasks_db: # Renamed task_db to task_db_orm for clarity
         latest_alert_db_obj = db.query(AlertHistory)\
                             .filter(AlertHistory.task_id == task_db_orm.id)\
-                            .filter(AlertHistory.is_acknowledged == False)\
+                            .filter(not AlertHistory.is_acknowledged)\
                             .order_by(AlertHistory.recorded_at.desc())\
                             .first() #
         
@@ -537,7 +536,7 @@ async def delete_dashboard(dashboard_id: int, db: Session = Depends(get_db)):
 
     # Step 2: Check if any tasks are still associated with this dashboard.
     # This is the crucial safety check.
-    associated_tasks_count = db.query(MonitoredTask).filter(MonitoredTask.dashboard_id == dashboard_id, MonitoredTask.is_active == True).count()
+    associated_tasks_count = db.query(MonitoredTask).filter(MonitoredTask.dashboard_id == dashboard_id, MonitoredTask.is_active).count()
     
     if associated_tasks_count > 0:
         raise HTTPException(

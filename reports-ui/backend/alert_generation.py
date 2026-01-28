@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 from elasticsearch import Elasticsearch
 from dateutil.relativedelta import relativedelta
-import pytz
 from datetime import timedelta
 
 

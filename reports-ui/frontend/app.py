@@ -1,59 +1,13 @@
-from datetime import date, timedelta
-
 import streamlit as st
 import requests
 import pandas as pd
 import matplotlib.pyplot as plt
-import datetime
-from datetime import timedelta
 from alert_page import show_alert_page
 
 #st.set_page_config(page_title="📈 Entity Trends Dashboard", layout="wide", initial_sidebar_state="expanded")
 BACKEND_URL = "http://reportsui_backend:8000" 
 
 # Column 1 – Metrics and Filters
-with col[0]:
-    st.markdown("#### 🚦 Top Trend Metrics")
-    st.markdown("##### 🔍 Filters")
-
-    start_date = st.date_input("Start Date", date.today() - timedelta(days=1))
-    end_date = st.date_input("End Date", date.today())
-    
-    fields_response = requests.get(f"{BACKEND_URL}/fields")
-    
-    if fields_response.status_code == 200:
-        fields = fields_response.json()
-        entity_field = st.selectbox("Select Entity Field", fields)
-    else:
-        st.error("❌ Failed to fetch fields from Elasticsearch.")
-        entity_field = None  
-    
-    trend_type = st.selectbox("Trend Type", ["increasing", "decreasing"])
-    top_n = st.slider("Top N Trends", min_value=1, max_value=50, value=10)
-    show_significant_only = st.checkbox("Show only statistically significant trends (p < 0.05)", value=True)
-
-    fetch_data = st.button("🚀 Fetch Trends and Time Series")
-
-# Column 2 – Trends Visualization
-with col[1]:
-    if fetch_data and entity_field:
-        trends_response = requests.get(
-            f"{BACKEND_URL}/trends",
-            params={
-                "start_date": start_date.strftime("%Y-%m-%d"),
-                "end_date": end_date.strftime("%Y-%m-%d"),
-                "trend_type": trend_type,
-                "top_n": top_n,
-                "entity_field": entity_field 
-            }
-        )
-
-        if trends_response.status_code == 200:
-            trend_data = trends_response.json()
-            
-            # Ensure the data is in list of dictionaries format
-            if isinstance(trend_data, dict):  # in case we got a single dictionary
-                trend_data = [trend_data]
 def trend_page():
     st.markdown("### 📊 Entity Mentions Trend and Time Series Dashboard")
     col = st.columns((2, 4.5, 4.5), gap="small")
