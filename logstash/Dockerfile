@@ -2,7 +2,7 @@ FROM python:3.13-slim
 
 # Install OpenJDK 17 (required for PySpark)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends openjdk-17-jdk-headless && \
+    apt-get install -y --no-install-recommends openjdk-21-jdk-headless && \
     rm -rf /var/lib/apt/lists/*
 
 # Set the JAVA_HOME environment variable
