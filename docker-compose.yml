@@ -282,21 +282,3 @@ services:
     networks:
       - elastic
     restart: always
-
-volumes:
-  certs:
-    driver: local
-  esdata01:
-    driver: local
-  kibanadata:
-    driver: local
-  logstash01:
-    driver: local
-  logdata:
-    driver: local
-  csvfiles:
-    driver: local
-
-networks:
-  elastic:
-    driver: bridge
