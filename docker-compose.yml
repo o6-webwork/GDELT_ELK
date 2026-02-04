@@ -228,6 +228,7 @@ services:
     build: ./reports-ui/backend
     environment:
       - DATABASE_URL=${DATABASE_URL} # for DB connection
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD} # for ES connection
     ports:
       - "8000:8000"
     depends_on:
@@ -251,7 +252,7 @@ services:
         condition: service_started
 
   postgres_db: 
-    image: postgres:17 
+    image: postgres:16.3-alpine 
     container_name: gdelt_postgres_db 
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -276,6 +277,7 @@ services:
       dockerfile: ./polling-service/Dockerfile
     container_name: gdelt_polling_service
     environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD} # for ES connection
       - DATABASE_URL=${DATABASE_URL} # connect to PostgreSQL
       - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS} 
       - POLLING_SERVICE_INITIAL_WAIT=${POLLING_SERVICE_INITIAL_WAIT} 

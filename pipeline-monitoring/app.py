@@ -13,6 +13,9 @@ import uvicorn
 from fastapi.responses import RedirectResponse
 from typing import List
 from starlette.responses import Response
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Create FastAPI app instance
 app = FastAPI()
@@ -32,6 +35,7 @@ LOGSTASH_FOLDER = "./logstash_ingest_data/json"
 PYSPARK_LOG_FILE = "./logs/pyspark_log.txt"
 INTERVAL = 15 * 60  # 15 minutes delay
 BASE_URL = "http://data.gdeltproject.org/gdeltv2/"
+ELASTIC_PASSWORD = os.getenv("ELASTIC_PASSWORD", "changeme")  # Replace with secure method in production
 
 # Variables
 current_viewing_mode = "light"
@@ -132,7 +136,7 @@ def get_pipeline_status(respective_log_file: str) -> str:
 def es_client_setup() -> Elasticsearch:
     es_client = Elasticsearch(
         "https://es01:9200",
-        basic_auth=("elastic", "changeme"),
+        basic_auth=("elastic", ELASTIC_PASSWORD),
         verify_certs=False,
         ssl_show_warn=False,
         request_timeout=30

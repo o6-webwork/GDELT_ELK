@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Query, Body, Depends, HTTPException
 from typing import Optional, List
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,16 +12,17 @@ import pytz
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager 
-
+from dotenv import load_dotenv
 
 from data_loader import get_fields_from_elasticsearch, load_data_from_elasticsearch
 from alert_generation import check_alerts_for_query, get_interval_timedelta, PARAM_SETS
 from database import MonitoredTask, AlertHistory, Dashboard, get_db, create_db_tables
 
+load_dotenv()
 ES_INDEX = "gkg-*"
 ES_HOST = "https://es01:9200"
 ES_USERNAME = "elastic"
-ES_PASSWORD = "changeme"
+ES_PASSWORD = os.getenv("ELASTIC_PASSWORD", "changeme")  # Replace with secure method in production
 
 class DashboardBase(BaseModel):
     name: str

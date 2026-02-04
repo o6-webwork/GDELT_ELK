@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from elasticsearch import Elasticsearch
 import sys
 import pandas as pd
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from a .env file if present
 
 # Assuming database.py and alert_generation.py are now in a 'shared_code' subdirectory
 # and that directory is in PYTHONPATH (see Dockerfile)
@@ -25,7 +27,7 @@ except ModuleNotFoundError:
 
 ES_HOST = "https://es01:9200"
 ES_USERNAME = "elastic"
-ES_PASSWORD = "changeme"
+ES_PASSWORD = os.getenv("ELASTIC_PASSWORD", "changeme")
 
 es_client = Elasticsearch(
     ES_HOST,
