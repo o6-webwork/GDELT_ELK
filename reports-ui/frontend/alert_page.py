@@ -51,8 +51,10 @@ def acknowledge_alert_in_api(alert_id: int):
             return response.json()
         else:
             error_detail = "Unknown error"
-            try: error_detail = response.json().get('detail', response.text)
-            except: error_detail = response.text
+            try:
+                error_detail = response.json().get('detail', response.text)
+            except Exception:
+                error_detail = response.text
             st.error(f"Failed to acknowledge alert {alert_id} (Status {response.status_code}): {error_detail}")
             return None
     except requests.exceptions.RequestException as e:
@@ -431,7 +433,7 @@ def show_alert_page():
 
         # Form for adding a new monitored query
         with st.form(key="add_new_monitoring_task_form"):
-            st.subheader(f"Add New Query")
+            st.subheader("Add New Query")
             
             col_query_input_live, col_submit_button_live = st.columns([4, 1])
 
@@ -655,7 +657,6 @@ def show_alert_page():
                 status_color = "green"
                 status_text = "OK                                                                                                              "
                 alert_details_line = "" # For storing specific alert details for the title
-                alert_timestamp_display = "" 
                 is_alert_acknowledged = False
                            
 
@@ -667,7 +668,7 @@ def show_alert_page():
                         try:
                             alert_dt = pd.to_datetime(latest_alert.get('alert_timestamp')).tz_convert('Asia/Singapore')
                             alert_ts_display = alert_dt.strftime('%Y-%m-%d %H:%M SGT')
-                        except:
+                        except Exception:
                             alert_ts_display = latest_alert.get('alert_timestamp')
                     alert_details_line = f"— {latest_alert.get('reason', 'N/A')} at {alert_ts_display}"
 
@@ -717,7 +718,8 @@ def show_alert_page():
 
                     if latest_alert and latest_alert.get('alert_type'): #
                         count_val = latest_alert.get('count') #
-                        if count_val is not None: st.write(f"  - **Count:** {count_val}") #
+                        if count_val is not None:
+                            st.write(f"  - **Count:** {count_val}") #
                         # ...
 
                         # Buttons for Alert: Acknowledge and View Graph
@@ -735,7 +737,7 @@ def show_alert_page():
                                 st.success("Alert Acknowledged ✓")       
 
                         with col_graph:
-                            if st.button(f"📊 View Graph", key=f"more_detail_monitored_{task_id}", type="secondary", use_container_width=True): #
+                            if st.button("📊 View Graph", key=f"more_detail_monitored_{task_id}", type="secondary", use_container_width=True): #
                                 user_query_for_alert_graph = {"query": {"query_string": {"query": task['query_string'], "fields": ["*"]}}} #
 
                                 # Get the original alert timestamp string (should be ISO format or similar from backend)

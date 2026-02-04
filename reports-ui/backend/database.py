@@ -1,9 +1,8 @@
 import os
 import datetime
 import pytz # For timezone-aware datetimes
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float, PrimaryKeyConstraint
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
-from sqlalchemy.sql import func # For server-side default timestamps if needed
 
 # Get DATABASE_URL from environment variable set by Docker Compose
 # Provide a default for local development if .env is not loaded by the runner

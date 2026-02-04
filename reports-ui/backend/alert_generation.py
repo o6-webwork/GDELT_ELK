@@ -172,7 +172,7 @@ def calculate_baseline_and_alerts(timeseries_df: pd.DataFrame,
             alert_info['alert_triggered'] = True
             alert_info['alert_type'] = 'Spike (Z-Score)'
             alert_info['reason'] = f"Z-score ({z_score:.2f}) exceeded threshold ({spike_threshold_val})"
-            print(f"--- ALERT DETECTED ---")
+            print("--- ALERT DETECTED ---")
             print(f"Timestamp: {alert_info['timestamp']}")
             print(f"Type: {alert_info['alert_type']}")
             print(f"Reason: {alert_info['reason']}")
@@ -196,7 +196,7 @@ def calculate_baseline_and_alerts(timeseries_df: pd.DataFrame,
                 alert_info['alert_triggered'] = True
                 alert_info['alert_type'] = 'Short Build'
                 alert_info['reason'] = f"Build ratio ({build_ratio:.2f}) over {build_window_periods_val} periods exceeded threshold ({build_threshold_val})"
-                print(f"--- ALERT DETECTED ---")
+                print("--- ALERT DETECTED ---")
                 print(f"Timestamp: {alert_info['timestamp']}")
                 print(f"Type: {alert_info['alert_type']}")
                 print(f"Reason: {alert_info['reason']}")
