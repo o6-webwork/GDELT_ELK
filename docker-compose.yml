@@ -218,6 +218,11 @@ services:
       - elastic
     environment:
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - LOG_FILE_PATH=/app/logs/log.txt
+      - SCRAPING_FILE_PATH=/app/logs/scraping_log.txt
+      - INGESTION_FILE_PATH=/app/logs/ingestion_log.txt
+      - TIMESTAMP_FILE_PATH=/app/logs/timestamp_log.txt
+      - JSON_FILE_PATH=/app/logs/json_log.txt
 
   reportsui_backend:
     build: ./reports-ui/backend

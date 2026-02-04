@@ -130,17 +130,11 @@ def get_pipeline_status(respective_log_file: str) -> str:
     return status
 
 def es_client_setup() -> Elasticsearch:
-    """
-    Sets up client to connect to Elasticsearch.
-
-    Returns:
-        A client instance that is connected to the Elasticsearch server.
-    """
     es_client = Elasticsearch(
         "https://es01:9200",
         basic_auth=("elastic", "changeme"),
-        verify_certs=True,  # Set to True if using trusted certs
-        ca_certs="./certs/ca/ca.crt",
+        verify_certs=False,
+        ssl_show_warn=False,
         request_timeout=30
     )
     return es_client

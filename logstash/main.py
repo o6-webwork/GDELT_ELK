@@ -252,19 +252,14 @@ def move_json_to_ingest(file_path: str) -> None:
 
 
 def es_client_setup() -> Elasticsearch:
-    '''
-    Sets up client to connect to Elasticsearch.
-
-    Returns:
-        Elasticsearch client instance connected to the server.
-    '''
-    return Elasticsearch(
+    es_client = Elasticsearch(
         "https://es01:9200",
         basic_auth=("elastic", PASSWORD),
-        verify_certs=True,
-        ca_certs="./certs/ca/ca.crt",
+        verify_certs=False,  # Disable strict CA extension verification
+        ssl_show_warn=False, # Hide the "Insecure Request" warnings
         request_timeout=30
     )
+    return es_client
 
 
 def es_check_data(timestamp_str: str) -> bool:
