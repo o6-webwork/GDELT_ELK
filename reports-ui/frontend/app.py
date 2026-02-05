@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import matplotlib.pyplot as plt
 from alert_page import show_alert_page
+import datetime
 
 #st.set_page_config(page_title="📈 Entity Trends Dashboard", layout="wide", initial_sidebar_state="expanded")
 BACKEND_URL = "http://reportsui_backend:8000" 
