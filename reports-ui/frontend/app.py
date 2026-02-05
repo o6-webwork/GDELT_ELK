@@ -16,8 +16,8 @@ def trend_page():
         st.markdown("#### 🚦 Top Trend Metrics")
         st.markdown("##### 🔍 Filters")
 
-        start_date = st.date_input("Start Date", pd.to_datetime("2025-04-13"))
-        end_date = st.date_input("End Date", pd.to_datetime("2025-04-14"))
+        start_date = st.date_input("Start Date", datetime.date.today() - datetime.timedelta(days=7))
+        end_date = st.date_input("End Date", datetime.date.today())
         
         fields_response = requests.get(f"{BACKEND_URL}/fields")
         
