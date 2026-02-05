@@ -88,7 +88,7 @@ def process_single_task(db: Session, task: MonitoredTask):
 
     # Check completed bucket
     if last_checked_utc is None or latest_completed_bucket_end > last_checked_utc:
-        (f"Task {task.id}: New completed bucket found ending at {latest_completed_bucket_end.astimezone(SGT_TIMEZONE).isoformat()}. Proceeding with check.")
+        print(f"Task {task.id}: New completed bucket found ending at {latest_completed_bucket_end.astimezone(SGT_TIMEZONE).isoformat()}. Proceeding with check.")
         
         # Convert UTC bucket end time to SGT for the API call, as check_alerts_for_query expects SGT
         end_datetime_for_check_sgt = latest_completed_bucket_end.astimezone(SGT_TIMEZONE) - datetime.timedelta(seconds = 1)
