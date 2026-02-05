@@ -27,8 +27,8 @@ load_dotenv()
 
 
 ################################################## Constants ##################################################
-USER = "elastic"
-PASSWORD = os.getenv("ELASTIC_PASSWORD")
+USER = os.getenv("ELASTIC_USER", "elastic")
+PASSWORD = os.getenv("ELASTIC_PASSWORD", "password")
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
 DOWNLOAD_FOLDER = "./csv"
 LOG_FILE = "./logs/log.txt"
@@ -168,6 +168,7 @@ def restructure_columns(df: DataFrame, column_name: str, fields: List[str]) -> D
     struct_fields = [col(f"{column_name}.{field}") for field in fields]
     return df.withColumn(column_name, struct(*struct_fields))
 
+
 def restructure_array_struct_column(df: DataFrame, column_name: str, fields: list[str]) -> DataFrame:
     """
     Creates or replaces a struct column composed of array_distinct-applied fields.
@@ -182,6 +183,7 @@ def restructure_array_struct_column(df: DataFrame, column_name: str, fields: lis
     """
     struct_fields = [array_distinct(col(f"{column_name}.{field}")).alias(field) for field in fields]
     return df.withColumn(column_name, struct(*struct_fields))
+
 
 def run_pipeline(raw_file: str, json_output: str) -> None:
     """
@@ -239,6 +241,7 @@ def run_pipeline(raw_file: str, json_output: str) -> None:
     move_json_to_ingest(os.path.join(json_output, new_file_name))
     spark.stop()
 
+
 def move_json_to_ingest(file_path: str) -> None:
     '''
     Moves the JSON file over to the json subfolder in logstash_ingest_data.
@@ -252,11 +255,18 @@ def move_json_to_ingest(file_path: str) -> None:
 
 
 def es_client_setup() -> Elasticsearch:
+    """
+    Sets up a secure instance of Elasticsearch client with SSL verification.
+
+    Returns:
+        Elasticsearch: The Elasticsearch client to send queries to.
+    """
     es_client = Elasticsearch(
         "https://es01:9200",
-        basic_auth=("elastic", PASSWORD),
-        verify_certs=False,  # Disable strict CA extension verification
-        ssl_show_warn=False, # Hide the "Insecure Request" warnings
+        basic_auth=(USER, PASSWORD),
+        ca_certs="/usr/share/logstash/certs/ca.crt", 
+        verify_certs=True,
+        ssl_show_warn=True, 
         request_timeout=30
     )
     return es_client
@@ -454,6 +464,7 @@ def server_scrape():
             write_all(f"An error occurred during the scraping process: {e}", file_list)
             sleep(60)  # Add a delay to prevent rapid retries on persistent errors.
 
+
 ############################################# Main ############################################
 if __name__ == "__main__":
     setup_elasticsearch(
@@ -462,6 +473,7 @@ if __name__ == "__main__":
         template_name="gkg-template",
         template_file="template.json"
     )
+
     thread1 = threading.Thread(target=server_scrape, daemon=True)
     thread2 = threading.Thread(target=process_downloaded_files, daemon=True)
     thread3 = threading.Thread(target=delete_processed_json, daemon=True)

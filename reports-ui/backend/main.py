@@ -86,7 +86,10 @@ class MonitoredTaskResponse(MonitoredTaskBase):
 es = Elasticsearch(
     ES_HOST,
     basic_auth=(ES_USERNAME, ES_PASSWORD),
-    verify_certs=False  
+    ca_certs="/app/certs/ca.crt", 
+    verify_certs=True,
+    ssl_show_warn=True, 
+    request_timeout=30
 )
 
 @asynccontextmanager

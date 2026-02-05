@@ -80,6 +80,7 @@ services:
       retries: 120
     networks:
       - elastic
+
   es01:
     depends_on:
       setup:
@@ -197,7 +198,7 @@ services:
     mem_limit: ${LS_MEM_LIMIT}
     environment:
       - xpack.monitoring.enabled=false
-      - ELASTIC_USER=elastic
+      - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
     networks:
       - elastic
@@ -217,6 +218,7 @@ services:
     networks:
       - elastic
     environment:
+      - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - LOG_FILE_PATH=/app/logs/log.txt
       - SCRAPING_FILE_PATH=/app/logs/scraping_log.txt
@@ -226,9 +228,11 @@ services:
 
   reportsui_backend:
     build: ./reports-ui/backend
+    volumes:
+      - certs:/app/certs
     environment:
-      - DATABASE_URL=${DATABASE_URL} # for DB connection
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD} # for ES connection
+      - DATABASE_URL=${DATABASE_URL}
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
     ports:
       - "8000:8000"
     depends_on:
@@ -264,8 +268,8 @@ services:
       - "${POSTGRES_PORT}:5432"
     networks:
       - elastic
-    restart: unless-stopped # Restart policy
-    healthcheck: # Checks if the database is ready to accept connections
+    restart: unless-stopped
+    healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB_NAME}"]
       interval: 10s
       timeout: 5s
@@ -277,13 +281,13 @@ services:
       dockerfile: ./polling-service/Dockerfile
     container_name: gdelt_polling_service
     environment:
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD} # for ES connection
-      - DATABASE_URL=${DATABASE_URL} # connect to PostgreSQL
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - DATABASE_URL=${DATABASE_URL}
       - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS} 
       - POLLING_SERVICE_INITIAL_WAIT=${POLLING_SERVICE_INITIAL_WAIT} 
     depends_on:
       postgres_db:
-        condition: service_healthy # Must wait for DB to be ready
+        condition: service_healthy
       es01: 
         condition: service_healthy
     networks:

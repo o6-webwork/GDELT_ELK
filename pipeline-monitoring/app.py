@@ -35,7 +35,8 @@ LOGSTASH_FOLDER = "./logstash_ingest_data/json"
 PYSPARK_LOG_FILE = "./logs/pyspark_log.txt"
 INTERVAL = 15 * 60  # 15 minutes delay
 BASE_URL = "http://data.gdeltproject.org/gdeltv2/"
-ELASTIC_PASSWORD = os.getenv("ELASTIC_PASSWORD", "changeme")  # Replace with secure method in production
+USER = os.getenv("ELASTIC_USER", "elastic")
+ES_PASSWORD = os.getenv("ELASTIC_PASSWORD", "changeme")  # Replace with secure method in production
 
 # Variables
 current_viewing_mode = "light"
@@ -134,14 +135,22 @@ def get_pipeline_status(respective_log_file: str) -> str:
     return status
 
 def es_client_setup() -> Elasticsearch:
+    """
+    Sets up a secure instance of Elasticsearch client with SSL verification.
+
+    Returns:
+        Elasticsearch: The Elasticsearch client to send queries to.
+    """
     es_client = Elasticsearch(
         "https://es01:9200",
-        basic_auth=("elastic", ELASTIC_PASSWORD),
-        verify_certs=False,
-        ssl_show_warn=False,
+        basic_auth=(USER, ES_PASSWORD),
+        ca_certs="/app/certs/ca.crt", 
+        verify_certs=True,
+        ssl_show_warn=True, 
         request_timeout=30
     )
     return es_client
+
 
 def es_check_data(timestamp_str: str) -> bool:
     """
