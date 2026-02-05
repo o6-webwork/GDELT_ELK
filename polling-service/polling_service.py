@@ -26,13 +26,16 @@ except ModuleNotFoundError:
 
 
 ES_HOST = "https://es01:9200"
-ES_USERNAME = "elastic"
+ES_USERNAME = os.getenv("ELASTIC_USER", "elastic")
 ES_PASSWORD = os.getenv("ELASTIC_PASSWORD", "changeme")
 
 es_client = Elasticsearch(
     ES_HOST,
     basic_auth=(ES_USERNAME, ES_PASSWORD),
-    verify_certs=False 
+    ca_certs="/app/certs/ca.crt", 
+    verify_certs=True,
+    ssl_show_warn=True, 
+    request_timeout=30
 )
 
 POLL_INTERVAL_SECONDS = 60 # Check for due tasks every 60 seconds

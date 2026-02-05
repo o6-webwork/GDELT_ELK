@@ -280,7 +280,10 @@ services:
       context: . 
       dockerfile: ./polling-service/Dockerfile
     container_name: gdelt_polling_service
+    volumes:
+      - certs:/app/certs
     environment:
+      - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - DATABASE_URL=${DATABASE_URL}
       - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS} 
