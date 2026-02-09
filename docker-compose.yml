@@ -177,6 +177,7 @@ services:
     networks:
       - elastic
     environment:
+      - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
 
   logstash01:
@@ -232,6 +233,7 @@ services:
       - certs:/app/certs
     environment:
       - DATABASE_URL=${DATABASE_URL}
+      - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
     ports:
       - "8000:8000"

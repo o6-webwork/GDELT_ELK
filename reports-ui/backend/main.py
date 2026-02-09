@@ -21,8 +21,11 @@ from database import MonitoredTask, AlertHistory, Dashboard, get_db, create_db_t
 load_dotenv()
 ES_INDEX = "gkg-*"
 ES_HOST = "https://es01:9200"
-ES_USERNAME = "elastic"
-ES_PASSWORD = os.getenv("ELASTIC_PASSWORD", "changeme")  # Replace with secure method in production
+ES_USERNAME = os.getenv("ELASTIC_USER")
+ES_PASSWORD = os.getenv("ELASTIC_PASSWORD")
+
+if ES_PASSWORD is None:
+    raise Exception("Environment variable ES_PASSWORD cannot be None!")
 
 class DashboardBase(BaseModel):
     name: str
@@ -86,7 +89,7 @@ class MonitoredTaskResponse(MonitoredTaskBase):
 es = Elasticsearch(
     ES_HOST,
     basic_auth=(ES_USERNAME, ES_PASSWORD),
-    ca_certs="/app/certs/ca.crt", 
+    ca_certs="/app/certs/ca/ca.crt", 
     verify_certs=True,
     ssl_show_warn=True, 
     request_timeout=30

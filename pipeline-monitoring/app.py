@@ -141,15 +141,20 @@ def es_client_setup() -> Elasticsearch:
     Returns:
         Elasticsearch: The Elasticsearch client to send queries to.
     """
-    es_client = Elasticsearch(
-        "https://es01:9200",
-        basic_auth=(USER, ES_PASSWORD),
-        ca_certs="/app/certs/ca.crt", 
-        verify_certs=True,
-        ssl_show_warn=True, 
-        request_timeout=30
-    )
-    return es_client
+    try:
+        es_client = Elasticsearch(
+            "https://es01:9200",
+            basic_auth=(USER, ES_PASSWORD),
+            ca_certs="/app/certs/ca/ca.crt", 
+            verify_certs=True,
+            ssl_show_warn=True, 
+            request_timeout=30
+        )
+        es_client.info()
+        return es_client
+    except Exception as e:
+        print(f"!!! ELASTICSEARCH CONNECTION ERROR: {e}")
+        raise
 
 
 def es_check_data(timestamp_str: str) -> bool:
