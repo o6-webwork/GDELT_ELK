@@ -585,4 +585,11 @@ async def archive_progress_endpoint() -> dict[str, int | str]:
 ############################ Main ############################
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=7979, reload=True)
+    uvicorn.run(
+        "app:app",
+        host="0.0.0.0",
+        port=7979,
+        reload=True,
+        ssl_keyfile="/app/certs/es01/es01.key",
+        ssl_certfile="/app/certs/es01/es01.crt"
+    )
