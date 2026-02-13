@@ -266,7 +266,7 @@ def es_client_setup() -> Elasticsearch:
     es_client = Elasticsearch(
         "https://es01:9200",
         basic_auth=(USER, PASSWORD),
-        ca_certs="/usr/share/logstash/certs/ca/ca.crt", 
+        ca_certs="/app/certs/ca/ca.crt", 
         verify_certs=True,
         ssl_show_warn=True, 
         request_timeout=30

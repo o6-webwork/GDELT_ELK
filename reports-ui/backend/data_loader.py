@@ -15,7 +15,8 @@ MAX_ENTITIES = 1000
 es = Elasticsearch(
     ES_HOST,
     basic_auth=(ES_USERNAME, ES_PASSWORD),
-    verify_certs=False  # use True in production!
+    verify_certs=True,
+    ca_certs="/app/certs/ca/ca.crt"
 )
 def get_fields_from_elasticsearch(index_pattern: str) -> list:
     array_fields = set()

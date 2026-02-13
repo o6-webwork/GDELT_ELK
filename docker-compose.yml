@@ -26,6 +26,7 @@ services:
     volumes:
       - certs:/usr/share/elasticsearch/config/certs
       - ./logstash:/usr/share/elasticsearch/logstash
+      - ./openssl_ca.cnf:/usr/share/elasticsearch/config/openssl_ca.cnf
     user: "0"
     command: >
       bash -c '
@@ -36,10 +37,12 @@ services:
           echo "Set the KIBANA_PASSWORD environment variable in the .env file";
           exit 1;
         fi;
-        if [ ! -f config/certs/ca.zip ]; then
-          echo "Creating CA";
-          bin/elasticsearch-certutil ca --silent --pem -out config/certs/ca.zip;
-          unzip config/certs/ca.zip -d config/certs;
+        # Generate CA using openssl to ensure key usage extension
+        if [ ! -f config/certs/ca/ca.crt ]; then
+          echo "Creating CA using OpenSSL";
+          mkdir -p config/certs/ca;
+          openssl genrsa -out config/certs/ca/ca.key 2048;
+          openssl req -x509 -new -nodes -key config/certs/ca/ca.key -sha256 -days 3650 -out config/certs/ca/ca.crt -config config/openssl_ca.cnf;
         fi;
         if [ ! -f config/certs/certs.zip ]; then
           echo "Creating certs";
@@ -191,7 +194,7 @@ services:
       co.elastic.logs/module: logstash
     user: root
     volumes:
-      - certs:/usr/share/logstash/certs
+      - certs:/app/certs/
       - "logstash01:/usr/share/logstash/data/"
       - "${LOGSTASH_ROOT}/pipeline/:/usr/share/logstash/pipeline/"
       - "${LOGSTASH_ROOT}/logstash.yml:/usr/share/logstash/config/logstash.yml"
