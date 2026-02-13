@@ -24,7 +24,7 @@ ES_HOST = "https://es01:9200"
 ES_USERNAME = os.getenv("ELASTIC_USER")
 ES_PASSWORD = os.getenv("ELASTIC_PASSWORD")
 
-if ES_PASSWORD is None:
+if ES_PASSWORD is None or ES_USERNAME is None:
     raise Exception("Environment variable ES_PASSWORD cannot be None!")
 
 class DashboardBase(BaseModel):
