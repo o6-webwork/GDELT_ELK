@@ -21,3 +21,6 @@ __pycache__/
 # Virtual environments
 venv/
 .venv/
+
+# Certs
+openssl_ca.cnf
