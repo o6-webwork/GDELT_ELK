@@ -26,6 +26,7 @@ services:
     volumes:
       - certs:/usr/share/elasticsearch/config/certs
       - ./logstash:/usr/share/elasticsearch/logstash
+      - ./openssl_ca.cnf:/usr/share/elasticsearch/config/openssl_ca.cnf
     user: "0"
     command: >
       bash -c '
