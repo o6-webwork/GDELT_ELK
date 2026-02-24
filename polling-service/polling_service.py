@@ -194,7 +194,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"CRITICAL: Database connection test failed: {e}")
         print("Ensure PostgreSQL is running and DATABASE_URL is correct.")
-        print(f"DATABASE_URL used: {os.getenv('DATABASE_URL', 'Not Set')}")
         sys.exit(1)
 
     # Test ES connection
