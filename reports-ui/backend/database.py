@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 
 # Get DATABASE_URL from environment variable set by Docker Compose
 # Provide a default for local development if .env is not loaded by the runner
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://gdeltuser:yourSUPERsecurePassword123!@localhost:5432/gdelt_monitoring")
+DATABASE_URL = os.getenv("DATABASE_URL")
 # IMPORTANT: Replace the default connection string above if you run this script locally
 # and your .env file isn't automatically picked up by that execution context.
 # For execution INSIDE a Docker container that gets DATABASE_URL from docker-compose, os.getenv is perfect.
