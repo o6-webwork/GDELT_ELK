@@ -10,7 +10,6 @@ from elasticsearch import Elasticsearch, NotFoundError
 from io import BytesIO
 from time import sleep
 from typing import List
-import sys
 import json
 from dotenv import load_dotenv
 
@@ -24,12 +23,11 @@ from schemas.gkg_schema import gkg_schema
 from etl.parse_gkg import gkg_parser
 
 
-sys.setrecursionlimit(10000)
 load_dotenv()
 
 
 ################################################## Constants ##################################################
-USER = "elastic"
+USER = os.getenv("ELASTIC_USER")
 PASSWORD = os.getenv("ELASTIC_PASSWORD")
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
 DOWNLOAD_FOLDER = "./csv"
@@ -41,6 +39,8 @@ JSON_LOG_FILE = "./logs/json_log.txt"
 LOGSTASH_PATH = "./logstash_ingest_data/json"
 PYSPARK_LOG_FILE = "./logs/pyspark_log.txt"
 
+if None in (USER, PASSWORD):
+    raise Exception("Environment variable cannot be None!")
 
 ################################################ DIR handling #################################################
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
@@ -129,7 +129,7 @@ def download_and_extract(url: str) -> None:
         url (str): The URL to download the zip file from.
     """
     file_name = url.split("/")[-1]
-    if any(f in os.listdir(DOWNLOAD_FOLDER) for f in [file_name.replace(".zip", "")]):
+    if os.path.exists(os.path.join(DOWNLOAD_FOLDER, file_name.replace(".zip", ""))):
          write_all(f"Extraction skipped: {file_name} (or contents) already exists.", [LOG_FILE, SCRAPING_LOG_FILE])
          return
 
@@ -170,6 +170,7 @@ def restructure_columns(df: DataFrame, column_name: str, fields: List[str]) -> D
     struct_fields = [col(f"{column_name}.{field}") for field in fields]
     return df.withColumn(column_name, struct(*struct_fields))
 
+
 def restructure_array_struct_column(df: DataFrame, column_name: str, fields: list[str]) -> DataFrame:
     """
     Creates or replaces a struct column composed of array_distinct-applied fields.
@@ -184,6 +185,7 @@ def restructure_array_struct_column(df: DataFrame, column_name: str, fields: lis
     """
     struct_fields = [array_distinct(col(f"{column_name}.{field}")).alias(field) for field in fields]
     return df.withColumn(column_name, struct(*struct_fields))
+
 
 def run_pipeline(raw_file: str, json_output: str) -> None:
     """
@@ -241,6 +243,7 @@ def run_pipeline(raw_file: str, json_output: str) -> None:
     move_json_to_ingest(os.path.join(json_output, new_file_name))
     spark.stop()
 
+
 def move_json_to_ingest(file_path: str) -> None:
     '''
     Moves the JSON file over to the json subfolder in logstash_ingest_data.
@@ -254,19 +257,21 @@ def move_json_to_ingest(file_path: str) -> None:
 
 
 def es_client_setup() -> Elasticsearch:
-    '''
-    Sets up client to connect to Elasticsearch.
+    """
+    Sets up a secure instance of Elasticsearch client with SSL verification.
 
     Returns:
-        Elasticsearch client instance connected to the server.
-    '''
-    return Elasticsearch(
+        Elasticsearch: The Elasticsearch client to send queries to.
+    """
+    es_client = Elasticsearch(
         "https://es01:9200",
-        basic_auth=("elastic", PASSWORD),
+        basic_auth=(USER, PASSWORD),
+        ca_certs="/app/certs/ca/ca.crt", 
         verify_certs=True,
-        ca_certs="./certs/ca/ca.crt",
+        ssl_show_warn=True, 
         request_timeout=30
     )
+    return es_client
 
 
 def es_check_data(timestamp_str: str) -> bool:
@@ -459,7 +464,8 @@ def server_scrape():
 
         except Exception as e:
             write_all(f"An error occurred during the scraping process: {e}", file_list)
-            raise e
+            sleep(60)  # Add a delay to prevent rapid retries on persistent errors.
+
 
 ############################################# Main ############################################
 if __name__ == "__main__":
@@ -469,6 +475,7 @@ if __name__ == "__main__":
         template_name="gkg-template",
         template_file="template.json"
     )
+
     thread1 = threading.Thread(target=server_scrape, daemon=True)
     thread2 = threading.Thread(target=process_downloaded_files, daemon=True)
     thread3 = threading.Thread(target=delete_processed_json, daemon=True)

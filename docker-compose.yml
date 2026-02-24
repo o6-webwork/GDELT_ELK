@@ -1,8 +1,32 @@
+version: "3.8"
+
+volumes:
+  certs:
+    driver: local
+  esdata01:
+    driver: local
+  kibanadata:
+    driver: local
+  logstash01:
+    driver: local
+  logdata:
+    driver: local
+  csvfiles:
+    driver: local
+  postgres_data:
+    driver: local
+
+networks:
+  elastic:
+    driver: bridge
+
 services:
   setup:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     volumes:
       - certs:/usr/share/elasticsearch/config/certs
+      - ./logstash:/usr/share/elasticsearch/logstash
+      - ./openssl_ca.cnf:/usr/share/elasticsearch/config/openssl_ca.cnf
     user: "0"
     command: >
       bash -c '
@@ -13,10 +37,12 @@ services:
           echo "Set the KIBANA_PASSWORD environment variable in the .env file";
           exit 1;
         fi;
-        if [ ! -f config/certs/ca.zip ]; then
-          echo "Creating CA";
-          bin/elasticsearch-certutil ca --silent --pem -out config/certs/ca.zip;
-          unzip config/certs/ca.zip -d config/certs;
+        # Generate CA using openssl to ensure key usage extension
+        if [ ! -f config/certs/ca/ca.crt ]; then
+          echo "Creating CA using OpenSSL";
+          mkdir -p config/certs/ca;
+          openssl genrsa -out config/certs/ca/ca.key 2048;
+          openssl req -x509 -new -nodes -key config/certs/ca/ca.key -sha256 -days 3650 -out config/certs/ca/ca.crt -config config/openssl_ca.cnf;
         fi;
         if [ ! -f config/certs/certs.zip ]; then
           echo "Creating certs";
@@ -46,6 +72,8 @@ services:
         until curl -s --cacert config/certs/ca/ca.crt https://es01:9200 | grep -q "missing authentication credentials"; do sleep 30; done;
         echo "Setting kibana_system password";
         until curl -s -X POST --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://es01:9200/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
+        echo "Creating ILM policy";
+        curl -s -X PUT --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://es01:9200/_ilm/policy/gdelt_14d_retention_policy -d@/usr/share/elasticsearch/logstash/ilm_policy.json;
         echo "All done!";
       '
     healthcheck:
@@ -55,10 +83,11 @@ services:
       retries: 120
     networks:
       - elastic
+
   es01:
     depends_on:
       setup:
-        condition: service_healthy
+        condition: service_started
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     labels:
       co.elastic.logs/module: elasticsearch
@@ -151,6 +180,7 @@ services:
     networks:
       - elastic
     environment:
+      - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
 
   logstash01:
@@ -164,7 +194,7 @@ services:
       co.elastic.logs/module: logstash
     user: root
     volumes:
-      - certs:/usr/share/logstash/certs
+      - certs:/app/certs/
       - "logstash01:/usr/share/logstash/data/"
       - "${LOGSTASH_ROOT}/pipeline/:/usr/share/logstash/pipeline/"
       - "${LOGSTASH_ROOT}/logstash.yml:/usr/share/logstash/config/logstash.yml"
@@ -172,7 +202,7 @@ services:
     mem_limit: ${LS_MEM_LIMIT}
     environment:
       - xpack.monitoring.enabled=false
-      - ELASTIC_USER=elastic
+      - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
     networks:
       - elastic
@@ -192,14 +222,28 @@ services:
     networks:
       - elastic
     environment:
+      - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - LOG_FILE_PATH=/app/logs/log.txt
+      - SCRAPING_FILE_PATH=/app/logs/scraping_log.txt
+      - INGESTION_FILE_PATH=/app/logs/ingestion_log.txt
+      - TIMESTAMP_FILE_PATH=/app/logs/timestamp_log.txt
+      - JSON_FILE_PATH=/app/logs/json_log.txt
 
   reportsui_backend:
     build: ./reports-ui/backend
+    volumes:
+      - certs:/app/certs
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - ELASTIC_USER=${ELASTIC_USER}
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
     ports:
       - "8000:8000"
     depends_on:
       es01:
+        condition: service_healthy
+      postgres_db: 
         condition: service_healthy
     networks:
       - elastic
@@ -210,21 +254,50 @@ services:
       - "8501:8501"
     networks:
       - elastic
+    volumes:
+    - ./reports-ui/frontend:/app 
+    depends_on:
+      reportsui_backend:
+        condition: service_started
 
-volumes:
-  certs:
-    driver: local
-  esdata01:
-    driver: local
-  kibanadata:
-    driver: local
-  logstash01:
-    driver: local
-  logdata:
-    driver: local
-  csvfiles:
-    driver: local
+  postgres_db: 
+    image: postgres:16.3-alpine 
+    container_name: gdelt_postgres_db 
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data 
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    networks:
+      - elastic
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-networks:
-  elastic:
-    driver: bridge
+  polling_service:
+    build:
+      context: . 
+      dockerfile: ./polling-service/Dockerfile
+    container_name: gdelt_polling_service
+    volumes:
+      - certs:/app/certs
+    environment:
+      - ELASTIC_USER=${ELASTIC_USER}
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - DATABASE_URL=${DATABASE_URL}
+      - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS} 
+      - POLLING_SERVICE_INITIAL_WAIT=${POLLING_SERVICE_INITIAL_WAIT} 
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      es01: 
+        condition: service_healthy
+    networks:
+      - elastic
+    restart: always

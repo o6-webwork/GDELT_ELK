@@ -13,6 +13,9 @@ import uvicorn
 from fastapi.responses import RedirectResponse
 from typing import List
 from starlette.responses import Response
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Create FastAPI app instance
 app = FastAPI()
@@ -32,6 +35,8 @@ LOGSTASH_FOLDER = "./logstash_ingest_data/json"
 PYSPARK_LOG_FILE = "./logs/pyspark_log.txt"
 INTERVAL = 15 * 60  # 15 minutes delay
 BASE_URL = "http://data.gdeltproject.org/gdeltv2/"
+USER = os.getenv("ELASTIC_USER", "elastic")
+ES_PASSWORD = os.getenv("ELASTIC_PASSWORD", "changeme")  # Replace with secure method in production
 
 # Variables
 current_viewing_mode = "light"
@@ -131,19 +136,26 @@ def get_pipeline_status(respective_log_file: str) -> str:
 
 def es_client_setup() -> Elasticsearch:
     """
-    Sets up client to connect to Elasticsearch.
+    Sets up a secure instance of Elasticsearch client with SSL verification.
 
     Returns:
-        A client instance that is connected to the Elasticsearch server.
+        Elasticsearch: The Elasticsearch client to send queries to.
     """
-    es_client = Elasticsearch(
-        "https://es01:9200",
-        basic_auth=("elastic", "changeme"),
-        verify_certs=True,  # Set to True if using trusted certs
-        ca_certs="./certs/ca/ca.crt",
-        request_timeout=30
-    )
-    return es_client
+    try:
+        es_client = Elasticsearch(
+            "https://es01:9200",
+            basic_auth=(USER, ES_PASSWORD),
+            ca_certs="/app/certs/ca/ca.crt", 
+            verify_certs=True,
+            ssl_show_warn=True, 
+            request_timeout=30
+        )
+        es_client.info()
+        return es_client
+    except Exception as e:
+        print(f"!!! ELASTICSEARCH CONNECTION ERROR: {e}")
+        raise
+
 
 def es_check_data(timestamp_str: str) -> bool:
     """
@@ -573,4 +585,11 @@ async def archive_progress_endpoint() -> dict[str, int | str]:
 ############################ Main ############################
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=7979, reload=True)
+    uvicorn.run(
+        "app:app",
+        host="0.0.0.0",
+        port=7979,
+        reload=True,
+        ssl_keyfile="/app/certs/es01/es01.key",
+        ssl_certfile="/app/certs/es01/es01.crt"
+    )

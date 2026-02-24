@@ -1,0 +1,7 @@
+# GDELT_ELK/polling_service/requirements.txt
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+elasticsearch==8.17.2
+python-dotenv==1.2.1
+pytz==2025.2
+pandas==2.2.2

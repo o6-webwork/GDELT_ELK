@@ -1,0 +1,135 @@
+import os
+import datetime
+import pytz # For timezone-aware datetimes
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float
+from sqlalchemy.orm import sessionmaker, declarative_base, relationship
+
+# Get DATABASE_URL from environment variable set by Docker Compose
+# Provide a default for local development if .env is not loaded by the runner
+DATABASE_URL = os.getenv("DATABASE_URL")
+# IMPORTANT: Replace the default connection string above if you run this script locally
+# and your .env file isn't automatically picked up by that execution context.
+# For execution INSIDE a Docker container that gets DATABASE_URL from docker-compose, os.getenv is perfect.
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# --- SQLAlchemy Models ---
+
+class Dashboard(Base):
+    __tablename__ = "dashboards"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    # You could add other fields later, like description or user_id
+
+    tasks = relationship(
+        "MonitoredTask", 
+        back_populates="dashboard", 
+        cascade="all, delete-orphan"
+    )
+
+class MonitoredTask(Base):
+    __tablename__ = "monitored_tasks"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    dashboard_id = Column(Integer, ForeignKey("dashboards.id"), nullable=False, index=True)
+    dashboard = relationship("Dashboard", back_populates="tasks")
+    query_string = Column(String, index=True, nullable=False)
+    interval_minutes = Column(Integer, default=15, nullable=False)
+    last_checked_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(pytz.utc), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    user_identifier = Column(String, index=True, nullable=True)
+
+    # --- Columns for User-Selectable Alert Parameters ---
+    # These will store the user's override. If NULL, the system uses defaults from PARAM_SETS.
+
+    # General parameters
+    custom_baseline_window_pd_str = Column(String, default='1d', nullable=True, comment="Pandas offset string e.g., '7d', '24h', '1d'. Overrides PARAM_SETS.BASELINE_WINDOW_FOR_ROLLING.")
+    custom_min_periods_baseline = Column(Integer, default=12, nullable=True, comment="Overrides PARAM_SETS.MIN_PERIODS_BASELINE.")
+    custom_min_count_for_alert = Column(Integer, default=1, nullable=True, comment="Overrides PARAM_SETS.MIN_COUNT_FOR_ALERT.")
+    
+    # Spike Detection specific (Z-score)
+    custom_spike_threshold = Column(Float, default=2.5, nullable=True, comment="Overrides PARAM_SETS.SPIKE_THRESHOLD.")
+    
+    # Build Detection specific (replaces separate short/extended builds)
+    custom_build_window_periods_count = Column(Integer, default=8, nullable=True, comment="Number of task's own intervals. Overrides PARAM_SETS.BUILD_WINDOW_PERIODS_COUNT.")
+    custom_build_threshold = Column(Float, default=2.2, nullable=True, comment="Overrides PARAM_SETS.BUILD_THRESHOLD.")
+
+    def __repr__(self):
+        return f"<MonitoredTask(id={self.id}, query='{self.query_string[:30]}...', active={self.is_active})>"
+
+class AlertHistory(Base):
+    __tablename__ = "alert_history"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    #id = Column(Integer, primary_key=True)
+    task_id = Column(Integer, ForeignKey("monitored_tasks.id"), nullable=False, index=True)
+    # Store datetimes in UTC
+    alert_timestamp = Column(DateTime(timezone=True), nullable=False) # Timestamp from the alert_info (event time)
+    recorded_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(pytz.utc), nullable=False) # When this record was created
+    #recorded_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(pytz.utc), nullable=False, primary_key=True) # When this record was created
+
+    
+    alert_type = Column(String, nullable=True)
+    reason = Column(Text, nullable=True)
+    
+    # Store key metrics related to the alert
+    count = Column(Integer, nullable=True)
+    baseline_mean = Column(Float, nullable=True)
+    baseline_std = Column(Float, nullable=True)
+    z_score = Column(Float, nullable=True)
+    build_ratio = Column(Float, nullable=True)
+    extended_build_ratio = Column(Float, nullable=True)
+    current_interval = Column(String, nullable=True)
+
+
+    # For storing the timeseries_data that led to the alert, JSONB is good in PostgreSQL
+    # For SQLite or other DBs, you might use Text and store JSON as a string.
+    # This can get large, so consider if you really need to store it for every alert.
+    # from sqlalchemy.dialects.postgresql import JSONB
+    # timeseries_snapshot = Column(JSONB, nullable=True) # If using PostgreSQL JSONB type
+
+    is_acknowledged = Column(Boolean, default=False, nullable=False)
+
+    # Add a relationship to MonitoredTask to enable cascades from task to alert history
+    task = relationship("MonitoredTask", backref="alerts")
+
+    # --- UNCOMMENT --- 
+    # __table_args__ = (
+    #     PrimaryKeyConstraint('id', 'recorded_at'), # Explicitly define the composite primary key
+    #     {
+    #         'postgresql_partition_by': 'RANGE (recorded_at)',
+    #     }
+    # )
+
+    def __repr__(self):
+        return f"<AlertHistory(id={self.id}, task_id={self.task_id}, type='{self.alert_type}')>"
+
+# Function to create tables in the database
+def create_db_tables():
+    # This is okay for development. For production, use Alembic migrations.
+    print(f"Attempting to connect to database at: {'postgresql://****:****@'+DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else DATABASE_URL}") # Mask credentials for printing
+    print("Creating database tables if they don't exist...")
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("Tables should now exist or were already present.")
+    except Exception as e:
+        print(f"Error creating tables: {e}")
+        print("Please ensure the PostgreSQL database is running and accessible,")
+        print("and that the DATABASE_URL is correctly configured.")
+        print(f"Using DATABASE_URL: {'postgresql://****:****@'+DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else DATABASE_URL}")
+
+
+# --- Dependency for FastAPI to get DB session ---
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    # This allows you to run `python database.py` to create tables initially
+    create_db_tables()  
