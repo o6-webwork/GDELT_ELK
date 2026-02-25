@@ -20,12 +20,10 @@ from database import MonitoredTask, AlertHistory, Dashboard, get_db, create_db_t
 
 load_dotenv()
 ES_INDEX = "gkg-*"
-ES_HOST = "https://es01:4848"
-ES_USERNAME = os.getenv("ELASTIC_USER")
-ES_PASSWORD = os.getenv("ELASTIC_PASSWORD")
-
-if ES_PASSWORD is None or ES_USERNAME is None:
-    raise Exception("Environment variable ES_PASSWORD cannot be None!")
+ES_PORT = os.environ["ES_PORT"]
+ES_HOST = f"https://es01:{ES_PORT}"
+ES_USERNAME = os.environ["ELASTIC_USER"]
+ES_PASSWORD = os.environ["ELASTIC_PASSWORD"]
 
 class DashboardBase(BaseModel):
     name: str

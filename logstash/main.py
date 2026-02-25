@@ -27,8 +27,9 @@ load_dotenv()
 
 
 ################################################## Constants ##################################################
-USER = os.getenv("ELASTIC_USER")
-PASSWORD = os.getenv("ELASTIC_PASSWORD")
+USER = os.environ["ELASTIC_USER"]
+PASSWORD = os.environ["ELASTIC_PASSWORD"]
+ES_PORT = os.environ["ES_PORT"]
 LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
 DOWNLOAD_FOLDER = "./csv"
 LOG_FILE = "./logs/log.txt"
@@ -38,9 +39,6 @@ TIMESTAMP_LOG_FILE = "./logs/timestamp_log.txt"
 JSON_LOG_FILE = "./logs/json_log.txt"
 LOGSTASH_PATH = "./logstash_ingest_data/json"
 PYSPARK_LOG_FILE = "./logs/pyspark_log.txt"
-
-if None in (USER, PASSWORD):
-    raise Exception("Environment variable cannot be None!")
 
 ################################################ DIR handling #################################################
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
@@ -264,7 +262,7 @@ def es_client_setup() -> Elasticsearch:
         Elasticsearch: The Elasticsearch client to send queries to.
     """
     es_client = Elasticsearch(
-        "https://es01:4848",
+        f"https://es01:{ES_PORT}",
         basic_auth=(USER, PASSWORD),
         ca_certs="/app/certs/ca/ca.crt", 
         verify_certs=True,

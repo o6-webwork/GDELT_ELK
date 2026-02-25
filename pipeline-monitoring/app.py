@@ -35,8 +35,9 @@ LOGSTASH_FOLDER = "./logstash_ingest_data/json"
 PYSPARK_LOG_FILE = "./logs/pyspark_log.txt"
 INTERVAL = 15 * 60  # 15 minutes delay
 BASE_URL = "http://data.gdeltproject.org/gdeltv2/"
-USER = os.getenv("ELASTIC_USER", "elastic")
-ES_PASSWORD = os.getenv("ELASTIC_PASSWORD", "changeme")  # Replace with secure method in production
+USER = os.environ["ELASTIC_USER"]
+ES_PASSWORD = os.environ["ELASTIC_PASSWORD"]
+ES_PORT = os.environ["ES_PORT"]
 
 # Variables
 current_viewing_mode = "light"
@@ -143,7 +144,7 @@ def es_client_setup() -> Elasticsearch:
     """
     try:
         es_client = Elasticsearch(
-            "https://es01:4848",
+            f"https://es01:{ES_PORT}",
             basic_auth=(USER, ES_PASSWORD),
             ca_certs="/app/certs/ca/ca.crt", 
             verify_certs=True,

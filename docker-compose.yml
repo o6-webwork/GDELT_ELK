@@ -28,6 +28,8 @@ services:
       - ./logstash:/usr/share/elasticsearch/logstash
       - ./openssl_ca.cnf:/usr/share/elasticsearch/config/openssl_ca.cnf
     user: "0"
+    environment:
+      - ES_PORT=${ES_PORT}
     command: >
       bash -c '
         if [ x${ELASTIC_PASSWORD} == x ]; then
@@ -69,11 +71,11 @@ services:
         find . -type d -exec chmod 750 \{\} \;;
         find . -type f -exec chmod 640 \{\} \;;
         echo "Waiting for Elasticsearch availability";
-        until curl -s --cacert config/certs/ca/ca.crt https://es01:4848 | grep -q "missing authentication credentials"; do sleep 30; done;
+        until curl -s --cacert config/certs/ca/ca.crt https://es01:${ES_PORT} | grep -q "missing authentication credentials"; do sleep 30; done;
         echo "Setting kibana_system password";
-        until curl -s -X POST --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://es01:4848/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
+        until curl -s -X POST --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://es01:${ES_PORT}/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
         echo "Creating ILM policy";
-        curl -s -X PUT --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://es01:4848/_ilm/policy/gdelt_14d_retention_policy -d@/usr/share/elasticsearch/logstash/ilm_policy.json;
+        curl -s -X PUT --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://es01:${ES_PORT}/_ilm/policy/gdelt_14d_retention_policy -d@/usr/share/elasticsearch/logstash/ilm_policy.json;
         echo "All done!";
       '
     healthcheck:
@@ -95,13 +97,13 @@ services:
       - certs:/usr/share/elasticsearch/config/certs
       - esdata01:/usr/share/elasticsearch/data
     ports:
-      - ${ES_PORT}:4848
+      - ${ES_PORT}:${ES_PORT}
     environment:
       - node.name=es01
       - cluster.name=${CLUSTER_NAME}
       - discovery.type=single-node
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-      - http.port=4848
+      - http.port=${ES_PORT}
       - bootstrap.memory_lock=true
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=true
@@ -123,7 +125,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -s --cacert config/certs/ca/ca.crt https://localhost:4848 | grep -q 'missing authentication credentials'",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:${ES_PORT} | grep -q 'missing authentication credentials'",
         ]
       interval: 10s
       timeout: 10s
@@ -146,7 +148,7 @@ services:
     environment:
       - NODE_OPTIONS=--max_old_space_size=4096
       - SERVERNAME=kibana
-      - ELASTICSEARCH_HOSTS=https://es01:4848
+      - ELASTICSEARCH_HOSTS=https://es01:${ES_PORT}
       - ELASTICSEARCH_USERNAME=kibana_system
       - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
       - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
@@ -183,6 +185,7 @@ services:
     environment:
       - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ES_PORT=${ES_PORT}
 
   logstash01:
     depends_on:
@@ -205,6 +208,7 @@ services:
       - xpack.monitoring.enabled=false
       - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ES_PORT=${ES_PORT}
     networks:
       - elastic
 
@@ -225,6 +229,7 @@ services:
     environment:
       - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ES_PORT=${ES_PORT}
       - LOG_FILE_PATH=/app/logs/log.txt
       - SCRAPING_FILE_PATH=/app/logs/scraping_log.txt
       - INGESTION_FILE_PATH=/app/logs/ingestion_log.txt
@@ -239,6 +244,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ES_PORT=${ES_PORT}
     ports:
       - "8000:8000"
     depends_on:
@@ -257,6 +263,9 @@ services:
       - elastic
     volumes:
     - ./reports-ui/frontend:/app 
+    environment:
+      - KIBANA_PORT=${KIBANA_PORT}
+      - ES_PORT=${ES_PORT}
     depends_on:
       reportsui_backend:
         condition: service_started
@@ -291,6 +300,7 @@ services:
     environment:
       - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ES_PORT=${ES_PORT}
       - DATABASE_URL=${DATABASE_URL}
       - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS} 
       - POLLING_SERVICE_INITIAL_WAIT=${POLLING_SERVICE_INITIAL_WAIT} 

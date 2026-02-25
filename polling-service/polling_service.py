@@ -25,9 +25,10 @@ except ModuleNotFoundError:
     from alert_generation import check_alerts_for_query
 
 
-ES_HOST = "https://es01:4848"
-ES_USERNAME = os.getenv("ELASTIC_USER", "elastic")
-ES_PASSWORD = os.getenv("ELASTIC_PASSWORD", "changeme")
+ES_PORT = os.environ["ES_PORT"]
+ES_HOST = f"https://es01:{ES_PORT}"
+ES_USERNAME = os.environ["ELASTIC_USER"]
+ES_PASSWORD = os.environ["ELASTIC_PASSWORD"]
 
 es_client = Elasticsearch(
     ES_HOST,

@@ -1,11 +1,16 @@
+import os
+from dotenv import load_dotenv
 from elasticsearch import Elasticsearch
 from datetime import date, timedelta, datetime
 import pandas as pd
 
+load_dotenv()
+
 # --- CONFIG ---
-ES_HOST = "https://es01:4848"
-ES_USERNAME = "elastic"
-ES_PASSWORD = "changeme"
+ES_PORT = os.environ["ES_PORT"]
+ES_HOST = f"https://es01:{ES_PORT}"
+ES_USERNAME = os.environ["ELASTIC_USER"]
+ES_PASSWORD = os.environ["ELASTIC_PASSWORD"]
 ES_INDEX = "gkg"
 # ENTITY_FIELD = "V21AllNames.Name.keyword"
 DATE_FIELD = "V2ExtrasXML.PubTimestamp"
