@@ -20,7 +20,7 @@ from database import MonitoredTask, AlertHistory, Dashboard, get_db, create_db_t
 
 load_dotenv()
 ES_INDEX = "gkg-*"
-ES_HOST = "https://es01:9200"
+ES_HOST = "https://es01:4848"
 ES_USERNAME = os.getenv("ELASTIC_USER")
 ES_PASSWORD = os.getenv("ELASTIC_PASSWORD")
 

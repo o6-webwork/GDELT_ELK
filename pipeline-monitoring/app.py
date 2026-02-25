@@ -143,7 +143,7 @@ def es_client_setup() -> Elasticsearch:
     """
     try:
         es_client = Elasticsearch(
-            "https://es01:9200",
+            "https://es01:4848",
             basic_auth=(USER, ES_PASSWORD),
             ca_certs="/app/certs/ca/ca.crt", 
             verify_certs=True,

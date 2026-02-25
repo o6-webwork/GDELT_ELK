@@ -264,7 +264,7 @@ def es_client_setup() -> Elasticsearch:
         Elasticsearch: The Elasticsearch client to send queries to.
     """
     es_client = Elasticsearch(
-        "https://es01:9200",
+        "https://es01:4848",
         basic_auth=(USER, PASSWORD),
         ca_certs="/app/certs/ca/ca.crt", 
         verify_certs=True,

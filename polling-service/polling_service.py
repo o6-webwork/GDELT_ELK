@@ -25,7 +25,7 @@ except ModuleNotFoundError:
     from alert_generation import check_alerts_for_query
 
 
-ES_HOST = "https://es01:9200"
+ES_HOST = "https://es01:4848"
 ES_USERNAME = os.getenv("ELASTIC_USER", "elastic")
 ES_PASSWORD = os.getenv("ELASTIC_PASSWORD", "changeme")
 

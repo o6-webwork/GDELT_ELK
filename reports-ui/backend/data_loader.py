@@ -3,7 +3,7 @@ from datetime import date, timedelta, datetime
 import pandas as pd
 
 # --- CONFIG ---
-ES_HOST = "https://es01:9200"
+ES_HOST = "https://es01:4848"
 ES_USERNAME = "elastic"
 ES_PASSWORD = "changeme"
 ES_INDEX = "gkg"
